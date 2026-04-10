@@ -1,0 +1,4 @@
+.mcp.json
+run-gemini-chat-mcp.sh
+run-openai-chat-mcp.sh
+.claude/skills/llm-consultants.md
