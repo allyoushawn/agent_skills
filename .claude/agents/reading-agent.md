@@ -1,6 +1,7 @@
 ---
 name: reading-agent
 description: Read-only file reading agent. Protects the lead agent's context window by reading files, extracting relevant information, and returning a compact structured report. Use when the goal is understanding, locating, or extracting information from a file — especially for non-tiny files. Do NOT use when the lead is about to edit and needs exact local syntax in its own context.
+model: haiku
 ---
 
 # Reading Agent

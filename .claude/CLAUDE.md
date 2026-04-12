@@ -54,11 +54,62 @@ To preserve the lead agent's context window, delegate editing work to a **genera
 
 **How to delegate:**
 1. Do all research and planning in the lead context first (read files, understand structure, form the plan).
-2. Write a self-contained brief for the subagent — include exact file paths, line numbers, what to change, why, and any constraints. Do NOT write "based on what we discussed"; assume the subagent has zero prior context.
+2. Write a self-contained brief for the subagent — include exact file paths, line numbers, what to change, why, and any constraints. Do NOT write "based on what we discussed"; assume the subagent has zero prior context. **End every brief with: "Return only: one sentence confirming the edit was made, or a one-line error description. No other output."**
 3. Spawn a `general-purpose` subagent via the Agent tool with that brief.
 4. Wait for the result and verify it before proceeding.
 
 The subagent should do the editing (Edit/Write tools); the lead agent should do the reasoning.
+
+## Subagent Output Protocol — Output Tokens Are Expensive
+
+Output tokens cost 3–8x input tokens. Two rules for all subagent interactions:
+
+**When writing briefs:** End every subagent brief with an explicit output instruction:
+> "Return only: [YAML schema name / 1–2 sentence result]. No preamble. No recap of the task."
+
+**When receiving results:** A subagent result is a delta — what changed or what the answer is. Do not treat it as a full state snapshot. Do not re-summarize it back into a longer note.
+
+## Subagent Model Routing — Match Capability to Cost
+
+Agent frontmatter sets model defaults. Be aware of the tiers:
+
+- **Haiku** (`$0.25/M`): reading-agent, experiment-analyzer, experiment-scribe, experiment-plan-critic — mechanical, structured-output, or read-only tasks with verifiable outputs
+- **Sonnet** (`$3/M`): kb-librarian, experiment-runtime, experiment-planner, experiment-code-change, knowledge-base-house-keeper, general-purpose subagents — semantic judgment, code reasoning, or failure classification
+- **Opus**: Reserve for frontier-grade tasks only (security audits, novel architecture design)
+
+Do not override to a higher tier without justification. Save cost via output constraints, not model downgrade, for borderline cases.
+
+## Circuit Breakers — Prevent Stuck Loops
+
+Any agentic loop must have explicit termination guards:
+
+1. **Iteration cap:** Respect the hard `max_rounds` parameter in iterative skills. Do not exceed it.
+2. **Replan escape hatch:** If `needs_replan: true` returns from critic on two consecutive rounds, surface to user rather than replanning.
+3. **Plateau signal:** If the best metric does not improve over 3 consecutive rounds, pause and surface to user.
+4. **No silent recovery:** If a subagent errors on retry 3+, escalate to lead and surface to user.
+
+## Context Window Hygiene
+
+**Lead agent context pruning:** After a subagent result is processed and its key finding noted, treat the raw result block as consumed — do not re-summarize it or re-reference it. For long multi-turn sessions, periodically summarize active state and flush completed subtask histories.
+
+**Skill lazy loading:** Only load skill files (SKILL.md) immediately relevant to the current step. With 17 skills in the system, loading all upfront inflates input context significantly.
+
+**Subagent briefs:** Pass only the relevant subset of prior results in a brief — not a recap of the entire session.
+
+## Effort Parameters (Sonnet agents only)
+
+When spawning Sonnet-tier subagents, set effort to match task complexity:
+
+| Agent / Task type | effort |
+|---|---|
+| experiment-runtime, kb-librarian | `medium` |
+| experiment-planner, experiment-code-change, knowledge-base-house-keeper | `medium` |
+| General-purpose editing/research subagent | `medium` |
+| Frontier-grade tasks (security, novel architecture) | `high` |
+
+Note: Haiku agents (reading-agent, experiment-analyzer, experiment-scribe, experiment-plan-critic) do not support the `effort` parameter — it is a no-op for them.
+
+`effort` is a hint, not a contract. Claude may still reason deeply on hard problems at `low`.
 
 ## LLM Consultants (Gemini / OpenAI second opinions)
 
@@ -68,3 +119,16 @@ Key points:
 - Use `mcp__chat-gemini__chat-with-gemini` for Gemini, `mcp__chat-openai__chat-with-openai` for OpenAI/GPT.
 - When consulting both, send the **same** prompt to each in parallel, then summarize agreements, disagreements, and a recommendation — attributed per model.
 - If an MCP call fails (auth, quota, model error), report the error and suggest checking `~/.claude/run-gemini-chat-mcp.sh` or `~/.claude/run-openai-chat-mcp.sh`.
+
+## KB Retrieval Before External Research
+
+Before doing a web search, calling an LLM consultant, or reasoning from scratch about a topic the user has worked on before, invoke the **kb-retriever** agent (via Agent tool) with a natural language query describing what you need to know.
+
+- If result is `HIT` or `PARTIAL`: use the returned excerpts as primary context. Cite the source files.
+- If result is `MISS`: proceed to external search or reasoning.
+
+**This applies to:** project context questions, past design decisions, known workflows, architecture questions, and user preferences not already covered by memory.
+
+**Do not invoke kb-retriever for:** purely technical questions with no project-specific context (e.g. "how does Python's GIL work"), one-off lookups, or tasks where the KB is clearly irrelevant.
+
+**Model routing:** kb-retriever runs at `sonnet` tier — do not override to opus.

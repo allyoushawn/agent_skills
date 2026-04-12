@@ -4,7 +4,7 @@ description: >-
   Summarizes experiment history: categories tried/untried/underexplored, plateau signals,
   avoid list, distance to goal. Use on cadence (e.g. every 2 rounds). Does not propose
   experiments or next actions.
-model: inherit
+model: haiku
 tools: Glob, Grep, Read
 ---
 

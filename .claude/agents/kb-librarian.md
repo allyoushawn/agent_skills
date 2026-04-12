@@ -1,6 +1,7 @@
 ---
 name: kb-librarian
 description: Read-only KB routing agent. Given a description of content to write, scans the knowledge base at /path/to/works/for/you/knowledge_base/, reads candidate files to assess their actual scope, and returns a concrete routing recommendation (append to existing file or create new file) with reasoning. Use during kb-update to determine the correct target file before writing anything.
+model: sonnet
 ---
 
 # KB Librarian

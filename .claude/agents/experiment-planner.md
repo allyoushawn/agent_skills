@@ -4,7 +4,7 @@ description: >-
   Proposes ranked experiment hypotheses for recsys iterative experiments. Use when
   the lead needs next-round proposals from run history, strategies.md priority, and
   optional analyzer_pack. Readonly; outputs structured YAML only.
-model: inherit
+model: sonnet
 tools: Glob, Grep, Read
 ---
 
