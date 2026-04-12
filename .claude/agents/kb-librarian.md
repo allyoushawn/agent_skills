@@ -16,10 +16,7 @@ You will receive:
 
 ## Process
 
-1. List the KB structure to understand what projects and files exist:
-   - `ls /path/to/works/for/you/knowledge_base/projects/`
-   - `ls /path/to/works/for/you/knowledge_base/preference/`
-   - `ls /path/to/works/for/you/knowledge_base/context/`
+1. Read `/path/to/works/for/you/knowledge_base/README.md`. From the KB_INDEX block, identify which top-level folders are most relevant to the incoming content based on their descriptions and Key Topics. Select the top 2–3 candidate folders. Then read each candidate folder's `README.md` and use its KB_INDEX Files table and Key Topics to identify the 2–4 most plausible target files — without reading those files yet.
 
 2. Identify candidate files based on topic overlap — do NOT rely on filename alone. Read the first ~30 lines of each candidate to understand its actual scope and purpose.
 

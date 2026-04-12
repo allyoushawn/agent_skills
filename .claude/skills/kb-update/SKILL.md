@@ -70,3 +70,5 @@ If none of these triggers apply, skip silently — don't ask.
 2. For each piece of content to write, spawn the **kb-librarian** agent (via Agent tool) with a description of the content. The kb-librarian will scan the KB, read candidate files to verify their actual scope, and return a concrete routing recommendation (append to existing file or create new file). Skip pieces that are already captured in a skill or memory, or belong in `claude-workflow.md` only if not captured elsewhere.
 3. Present the kb-librarian's routing recommendation(s) to the user: "kb-librarian recommends writing X to file Y because Z." Wait for approval before writing anything.
 4. Write the update to the approved location — include the *why* (design context), not just the *what*
+
+5. After writing, invoke the **kb-organizer** agent (via Agent tool) with `scope = <the folder you just wrote to>`. Wait for its change report. This refreshes the folder's KB_INDEX and propagates topic changes to ancestor READMEs. If kb-organizer reports a "Suggested Reorganization", include it in your summary to the user but do not act on it without explicit instruction.
