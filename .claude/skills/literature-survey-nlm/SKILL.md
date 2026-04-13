@@ -7,7 +7,26 @@ description: "NotebookLM-backed literature survey skill. Token-efficient alterna
 
 Performs a structured literature survey on a given topic using NotebookLM for per-paper analysis. Saves all outputs under the paper reading repo.
 
-This skill is a large-scale task. You must use the Agent tool and delegate it to a general-purpose agent. Do not handle it directly.
+## Delegation Architecture (Enforced)
+
+This skill processes abundant information across many phases. **Failure to delegate at every level causes the plan to be lost from context.** Two mandatory delegation rules:
+
+**Rule 1 — Lead agent must delegate immediately.** When you (the lead agent) receive this skill, immediately delegate the entire task to a fresh general-purpose subagent via the Agent tool. Pass the topic, topic-slug, and these full skill instructions verbatim. Do not execute any phase yourself.
+
+**Rule 2 — Orchestrator subagent must delegate each phase.** The subagent receiving the delegation acts as an orchestrator only. Its job: read state, determine next phase, write a self-contained brief, dispatch a per-phase subagent, read results, advance state. **Do not execute phases directly in the orchestrator** — as phases accumulate output the plan will be crowded out of context. Delegate each phase:
+
+| Phase | Delegation |
+|-------|-----------|
+| Phase 0 (state detection) | Inline — read-only and brief |
+| Phase 1 (requirements + search strategy) | Delegate to subagent |
+| Phase 2 (paper discovery) | Delegate to subagent |
+| Phase 3 (per-paper NLM analysis) | Per-batch subagents (3–5 papers each) — follow Phase 3 delegation model exactly |
+| Phase 3.5 (finalize method tracker) | Delegate to subagent |
+| Phase 3.7 (cross-reference mapping) | Per-group subagents — follow Phase 3.7 instructions |
+| Phase 4 (literature review synthesis) | Delegate to subagent |
+| Phase 5 (executive summary) | Delegate to subagent |
+
+Each per-phase brief must be fully self-contained: output folder path, `notebook_id` from `notebooklm-state.md`, verbatim content of relevant files (`requirements.md`, `queue.md`), and the specific phase instructions from this document. End every brief with: "Return only: one sentence confirming the phase completed, or a one-line error. No other output."
 
 ## Usage
 
@@ -166,6 +185,12 @@ If the user requests "start from scratch," either suggest a new folder name whil
    Append a `## Project Context` section to `requirements.md` with the user's response. This section is always present — for a general survey it captures audience and goals; for a project-specific survey it captures the concrete framing.
 
    This section is the **north star** for the entire survey. It shapes not just which papers are included, but what is extracted from each paper (Phase 3 Query 3), how findings are synthesized (Phase 4 Queries 6–7), and how the executive summary is framed (Phase 5).
+
+7. **Must Include / Project Context consistency check (mandatory):** After writing the `## Project Context` section, re-read each cluster listed under `## Must Include` in `requirements.md`. For each cluster, ask: *does the output type of this method class match what the Project Context defines as useful?* Specifically:
+   - Identify the **output type** the cluster produces (e.g., aggregate lift estimate, per-interaction credit score, time-to-event probability, binary treatment effect).
+   - Compare it to the **output type the Project Context requires** (e.g., "continuous training label", "per-interaction credit score", "channel-level budget allocation input").
+   - If there is a mismatch (the cluster produces output type A but the Project Context requires output type B), flag the contradiction to the user: state which cluster is misaligned, why, and suggest either (a) demoting it to a "Background only" tier (still survey, but do not allocate core paper budget) or (b) removing it from Must Include entirely.
+   - Only proceed to Phase 2 after the user has confirmed or revised the Must Include list following this check.
 
 - Core keyword groups: different phrasings of the topic, related concepts
 - Most relevant venue list (selected from the list below)
@@ -389,7 +414,14 @@ For each paper in the batch:
 Before ingesting, normalize the URL:
 
 - **arXiv abstract URL** (`arxiv.org/abs/<ID>` or `arxiv.org/abs/<ID>v<N>`): convert to PDF URL → `https://arxiv.org/pdf/<ID>.pdf`
-- **Paywalled publisher URL** (IEEE Xplore `ieeexplore.ieee.org`, ACM DL `dl.acm.org`, Springer `link.springer.com`, Elsevier `sciencedirect.com`): mark as `nlm:failed:paywall` in queue.md, add to Skipped section, skip this paper entirely.
+- **Paywalled publisher URL** (IEEE Xplore `ieeexplore.ieee.org`, ACM DL `dl.acm.org`, Springer `link.springer.com`, Elsevier `sciencedirect.com`): do **not** skip immediately. First search for a free version in this order:
+  1. `site:arxiv.org [title]`
+  2. `site:ssrn.com [title]`
+  3. Semantic Scholar — check for "Open Access PDF" button
+  4. Author homepage: search `[first author name] [title] pdf`
+
+  If a free URL is found, replace the URL with the free version and continue ingestion normally.
+  Only if all four checks return nothing: mark as `nlm:failed:paywall` in queue.md, log the search attempts in the Skipped section as `"paywall — checked arxiv, SSRN, Semantic Scholar, author homepage; no free version found"`, and skip.
 
 ### 3-B: Ingest into NLM
 
@@ -531,7 +563,7 @@ After Phase 3.5 is complete, you **must** run this step. Do **not** start Phase 
    [Phase 3.7 complete] Reverse citation map created: X total papers, Y reverse-citation relations recorded
    ```
 
-Only after this step is fully complete may you proceed to Phase 4.
+Only after this step is fully complete may you proceed to Phase 4. Additionally, before starting Phase 4, verify that the "Done" section of `queue.md` contains ≥ 50% of the target paper count recorded in `requirements.md` (and at least 30 papers). If this threshold is not met, return to Phase 3 and continue processing papers until it is. To skip this gate, the user must explicitly approve early synthesis.
 
 ---
 
@@ -598,10 +630,11 @@ After drafting File 2 and File 3, before stopping, evaluate coverage:
 1. List all items specified in `requirements.md` under "Request", "Must Include", and "Core Keywords".
 2. Evaluate how well `literature-review.md` and `executive-summary.md` cover each item. The criterion for "covered" is whether enough evidence exists for decision-making.
 3. Compute overall coverage as a percentage. Example: `"18 covered out of 20 requirement items = 90%"`
+4. **Project Context fitness check:** Re-read the `## Project Context` section in `requirements.md`. For each key statement in the Project Context (required output type, domain constraint, target variable type, use-case description), verify that at least one paper cluster in `literature-review.md` directly addresses it. A cluster "directly addresses" a statement if its papers produce the output type or solve the problem the statement describes. An unaddressed Project Context statement counts as a coverage gap regardless of keyword coverage percentage. List any unaddressed statements explicitly.
 
 **Actions based on coverage:**
 
-- If coverage ≥ 95% and the executive summary alone is sufficient for decision-making: final completion. Report to user.
+- If coverage ≥ 95% AND all Project Context statements are addressed by at least one paper cluster: final completion. Report to user.
 - If coverage < 95% or some items are too thinly covered:
   1. Specify which requirement items are lacking
   2. Collect an additional 100 papers to fill those gaps
