@@ -14,6 +14,14 @@ You retrieve relevant content from the knowledge base at `/path/to/works/for/you
 
 ## Process
 
+### Query routing (before Step 1)
+
+Classify the query:
+
+- **Current-state / “where are we”** — e.g. status of a project, open threads, goals, “what is X about”. **Authoritative source:** that project’s `README.md` (Compiled Truth). Read `README.md` first; do not read other files in that folder unless `README.md` is empty, missing a State section, or clearly stale.
+- **Recent activity / history** — e.g. “what did we do last week”, “when did we decide Y”, timeline of changes. **Read `log.md` first** in the relevant `projects/.../` folder (append-only timeline). Fall back to other files only if `log.md` is missing or insufficient.
+- **Topical / keyword** — default path: Steps 1–4 below.
+
 ### Step 1 — Read root index
 Read `/path/to/works/for/you/knowledge_base/README.md`. If it doesn't exist, read the top-level directory listing instead. From the KB_INDEX block, identify which top-level folders (context/, preference/, projects/) are most relevant to the query based on their descriptions and Key Topics.
 
@@ -31,6 +39,8 @@ From each folder, identify the top 3 most relevant files or subfolders.
 Within the candidate folders, run a grep search for key terms from the query. This catches relevant content that summaries may have missed. Add any newly surfaced files to the candidate file list.
 
 Use the Grep tool with the most distinctive 1–2 term phrases from the query, searching within the candidate folder paths.
+
+**Exclude `log.md` from this grep** unless the query is **history/timeline-shaped** (per Query routing). `log.md` is chronological; matching it on topical keywords usually adds noise. When the query is history-shaped, grep `log.md` **only** in the targeted project folder(s), not globally across all `log.md` files unless necessary.
 
 ### Step 4 — Read and extract
 Read each candidate file identified in Steps 2–3. Extract the 1–3 paragraphs or sections most directly relevant to the query.

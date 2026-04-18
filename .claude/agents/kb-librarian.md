@@ -42,6 +42,7 @@ Reason: <why no existing file is a good fit — name the closest candidate and e
 
 ## Rules
 
+- **Never recommend `log.md` as a routing target** for topic content. `log.md` is append-only timeline data; the calling skill (`kb-update`, `kb-from-conversation`) updates it unconditionally after writes. Your job is only where the **substantive note** goes (append vs new file).
 - Never write, edit, or create any file.
 - Never rely on filename pattern-matching alone — always read the file to verify scope.
 - If two files are plausible candidates, read both and pick the better fit, explaining why you rejected the other.

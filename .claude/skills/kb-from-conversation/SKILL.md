@@ -26,8 +26,11 @@ Converts a pasted LLM conversation into a structured, durable knowledge base not
 4. For each topic to keep, spawn the **kb-librarian** agent (via Agent tool) with a description of the content. Ask it to scan the target project folder and return a concrete routing recommendation: append to existing file or create a new file
 5. Present the routing plan to the user: "I'll create X in project Y" or "I'll append to Z". Wait for approval before writing — unless the user said "just do it"
 6. Write the note file(s) using the structure below
-7. Update the project `README.md`: add a row to the Contents table and a line to the Progress Log
-8. Confirm completion: "Added `filename.md` to `project/`. README updated."
+7. **Project log and README (Compiled Truth):**
+   - If the project's `log.md` is missing, create it with a single seed line: `## [YYYY-MM-DD] init | <short label from project folder or README title>`.
+   - Append to `log.md`: `## [YYYY-MM-DD] ingest | <topic or filename of the new note>`.
+   - If the project `README.md` has a **Contents** or **Files** table (inside or outside `KB_INDEX`), add a row linking the new note file. Do **not** add a Progress Log or chronological session log inside `README.md`.
+8. Confirm completion: "Added `filename.md` to `project/`. `log.md` updated."
 
 ## Handling multi-topic conversations
 
@@ -71,7 +74,7 @@ Addresses Big Question #N ([domain]) and #M ([domain]).  ← omit if not a big_q
 - First line after title: italicized reference to which Big Question(s) this addresses, if applicable
 - Cross-reference table at the bottom linking to related files in the same project (when relevant)
 
-## README update conventions
+## README and log conventions
 
-- **Contents table row:** `| [filename.md](./filename.md) | one-line description |`
-- **Progress Log entry:** `- Added [topic]: [2–3 sentence summary of what was captured and which Big Questions it addresses]`
+- **Contents / Files table row** (if the project README maintains one): `| [filename.md](./filename.md) | one-line description |`
+- **`log.md` entry** (always append, never rewrite past lines): `## [YYYY-MM-DD] ingest | <topic or filename>: [2–3 word summary of what was captured]`

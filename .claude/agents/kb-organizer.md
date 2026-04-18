@@ -14,7 +14,9 @@ You maintain the knowledge base at `/path/to/works/for/you/knowledge_base/` by k
 
 ## YAML Frontmatter Standard
 
-Every KB `.md` file (except README.md itself) should have this frontmatter:
+**Exception — `log.md`:** Do not add or require YAML frontmatter on `log.md`. It is an append-only timeline; rewriting the file to prepend frontmatter would violate that contract.
+
+Every other KB `.md` file (except `README.md` and `log.md`) should have this frontmatter:
 
 ```yaml
 ---
@@ -72,20 +74,24 @@ When delegating, spawn a `reading-agent` subagent with:
 ## Process
 
 ### Step 1 — Enumerate files
-For the given scope, list all `.md` files in each folder (excluding README.md itself).
+For the given scope, list all `.md` files in each folder (excluding `README.md` itself). Include `log.md` when present — it appears in the Files table as a pinned row (Step 3) but is skipped for frontmatter (Step 2).
 
 ### Step 2 — Ensure frontmatter
-For each `.md` file (not README):
+For each `.md` file (not `README`, not `log.md`):
 - Read the first 15 lines directly (small slice, always fast)
 - If YAML frontmatter is present (starts with `---`), read it and move on
 - If frontmatter is missing: check file size, then follow the File Reading Protocol above to read/extract content, generate appropriate frontmatter (title, summary, topics, status, updated), and prepend it to the file using the Edit tool
 
 ### Step 3 — Build KB_INDEX content
-Using the frontmatter from all files (and subfolder READMEs if present), synthesize:
+Using the frontmatter from all files **except `log.md`** (and subfolder READMEs if present), synthesize:
 - A 1–2 sentence folder description
-- A Key Topics list (union of all topics in the folder)
-- The Files table (one row per file, sourced from frontmatter)
+- A Key Topics list (union of all topics in the folder — **exclude** `log.md` from the union)
+- The Files table: one row per file with frontmatter, sourced from frontmatter, sorted alphabetically by filename (or by existing convention in that folder). **If `log.md` exists in the folder**, append exactly **one pinned row at the bottom** of the Files table (after all other files), never as a middle row:
+  `| log.md | Append-only timeline | — | active | YYYY-MM-DD |`
+  Use the calendar date of the file's last modification for `Updated` (from `ls -la` or equivalent); if unavailable, use today's date.
 - The Subfolders table (if applicable, sourced from subfolder README descriptions)
+
+Do **not** add `log.md` twice — it must appear only as this pinned row, not as a regular frontmatter-derived row.
 
 ### Step 4 — Write KB_INDEX to README.md
 - If README.md does not exist: create it with the KB_INDEX block followed by a `## Notes` section (empty)

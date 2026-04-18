@@ -42,6 +42,14 @@ You are a **knowledge base auditor**. You review an assigned scope of the KB and
 - Behavior rules in `projects/` (belongs in skills or memory)
 - Redundant copies of content already captured in `~/.claude/skills/` or `~/.claude/memory/`
 
+### Convention (README + log.md)
+
+For each **project folder** under `projects/` (including `ad_hoc/`):
+
+1. **Missing `log.md`** — Flag `[CONVENTION]` if the folder contains topic `.md` files (or a `README.md`) but has no `log.md`. (New folders should get `log.md` on first `kb-update` or via `create-ad-hoc-project`.)
+2. **Chronological headings in `README.md`** — If `README.md` contains lines like `## [YYYY-MM-DD]` or a `## Progress Log` / dated session dumps, flag `[CONVENTION]` — chronological content belongs in `log.md`, not `README.md`.
+3. **Append-only for `log.md`** — The lead can verify with `git log -p -- <path>/log.md`. If you detect duplicate or conflicting same-date entries when reading `log.md`, flag `[CONVENTION]`. Full git history checks are optional (read-only tools may not include git).
+
 ## Output
 
 Structured markdown report:
@@ -67,8 +75,12 @@ Structured markdown report:
 ### Misplaced
 - **[MISPLACED]** `preference/claude-workflow.md` contains session progress log — move to `projects/`
 
+### Convention
+- **[CONVENTION]** `projects/foo/` missing `log.md` despite having topic notes
+- **[CONVENTION]** `projects/foo/README.md` contains `## [2026-04-18]` style dated headings — move chronology to `log.md`
+
 ## Summary
-<N> issues found: <X> duplicates, <Y> conflicts, <Z> stale, <W> broken refs, <V> misplaced
+<N> issues found: <X> duplicates, <Y> conflicts, <Z> stale, <W> broken refs, <V> misplaced, <U> convention
 
 ## No issues
 <list any files reviewed with no issues>
