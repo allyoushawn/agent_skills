@@ -26,6 +26,7 @@ This skill processes abundant information across many phases. **Failure to deleg
 | Phase | Delegation |
 |-------|-----------|
 | Phase 0 (state detection) | Inline — read-only and brief |
+| Phase 0.5 (ensure README.md) | Inline — interactive prompt + small write |
 | Phase 1 (requirements + search strategy) | Delegate to subagent |
 | Phase 2 (paper discovery) | Delegate to subagent |
 | Phase 3 (batch processing) | Per-batch subagents — follow Phase 3 instructions exactly |
@@ -46,7 +47,7 @@ Each per-phase brief must be fully self-contained: output folder path, verbatim 
   (lowercase, spaces → hyphens, special characters removed).
   Example: `"model cascading in ML systems"` → `model-cascading-in-ml-systems`
 
-Outputs are saved under `/path/works/for/you/paper_reading_repo/literature-survey/[topic-slug]/`.
+Outputs are saved under `<paper-reading-repo>/literature-survey/[topic-slug]/`, where `<paper-reading-repo>` is resolved at runtime via the `fetch-repo-path` skill (reads `/path/to/works/for/you/knowledge_base/context/repos.md` → "Paper Reading Repo" entry). Do not hardcode this path.
 
 Examples:
 - `/literature-survey model cascading in ML systems`
@@ -79,6 +80,8 @@ What resume mode does **not** do:
 ```text
 [paper-reading-repo]/literature-survey/
 ├── [topic-A]/
+│   ├── README.md                      # Persistent topic context (why surveyed, audience, project framing)
+│   ├── log.md                         # Append-only run journal
 │   ├── requirements.md                # Survey requirements and search strategy
 │   ├── literature-review.md           # Full paper list + summary review
 │   ├── executive-summary.md           # Summary for decision-makers
@@ -89,6 +92,8 @@ What resume mode does **not** do:
 │       ├── 2024_NeurIPS_MethodName_Paper-Title.pdf
 │       └── ...
 ├── [topic-B]/
+│   ├── README.md
+│   ├── log.md
 │   ├── requirements.md
 │   ├── ...
 │   └── read-papers/
@@ -115,12 +120,16 @@ If the output folder does not exist, skip this phase and start from Phase 1.
 
 Check whether the following files exist in the output folder:
 
+* `README.md`
+* `log.md`
 * `requirements.md`
 * `queue.md`
 * `method-tracker.md`
 * `literature-review.md`
 * `executive-summary.md`
 * `read-papers/` folder and the number of `.md` files inside it
+
+The presence of `README.md` and `log.md` does not gate state determination, but report their status to the user during the resume-state report (e.g. "README.md present — Project Context loaded", "log.md has N prior run entries").
 
 #### 0-2. Determine Progress State
 
@@ -164,6 +173,37 @@ If the user requests "start from scratch," either suggest a new folder name whil
 
 ---
 
+### Phase 0.5: Ensure README.md exists
+
+This phase runs whether or not the folder is fresh. It supersedes the standalone Phase 1 Step 6 "Project Context" prompt.
+
+- If `[topic-slug]/README.md` does NOT exist:
+  - Prompt the user for:
+    - (a) Why this topic is being surveyed — what triggered it, what decision it should support
+    - (b) Audience — who consumes this survey (just you, your team, decision-makers, etc.)
+    - (c) Project Context — the same content the original Phase 1 Step 6 prompt asks for: if for a specific project, describe the project, how the survey output will be used, what 'relevant' means in project terms (e.g., 'a method is useful if its output can serve as continuous training labels'), and any paper types that are especially valuable even if not top-venue. If a general academic survey, describe the target audience and what decisions or understanding the survey should support.
+  - Write `README.md` using this template:
+
+```markdown
+# Literature Survey Topic — <Topic>
+
+**Created:** YYYY-MM-DD
+
+## Why surveyed
+[user's answer to (a)]
+
+## Audience
+[user's answer to (b)]
+
+## Project Context
+[user's answer to (c) — this is the north star for extraction (Phase 3), taxonomy (Phase 4), and executive summary framing (Phase 5)]
+```
+
+- If `[topic-slug]/README.md` already exists: read it. The `## Project Context` section is the canonical source.
+- In all subsequent phases that reference `## Project Context`, read it from `README.md`. `requirements.md` may include a one-line pointer (`Project Context: see ./README.md`) instead of duplicating the section.
+
+---
+
 ### Phase 1: Preparation and Search Strategy Setup
 
 1. Create the output folder and the `read-papers/` subfolder if they do not exist.
@@ -175,17 +215,17 @@ If the user requests "start from scratch," either suggest a new folder name whil
    If the user requests revisions, reflect them and confirm again.
    Only after user approval may you proceed to Phase 2.
 
-6. **Survey purpose prompt (mandatory):** Ask the user:
+6. **Project Context (already collected in Phase 0.5):** Project Context is collected and persisted in `README.md` during Phase 0.5. Do not re-prompt here. In `requirements.md`, include a one-line reference instead of duplicating the section:
 
-   > "What is the intended use of this survey?
-   > (a) If for a specific project: describe what the project is, how the survey output will be used, what 'relevant' means in your project's terms (e.g., 'a method is useful if its output can serve as continuous training labels'), and any paper types that are especially valuable even if not top-venue (e.g., industry papers from the same domain).
-   > (b) If a general academic survey: describe the target audience and what decisions or understanding the survey should support."
+   ```markdown
+   ## Project Context
 
-   Append a `## Project Context` section to `requirements.md` with the user's response. This section is always present — for a general survey it captures audience and goals; for a project-specific survey it captures the concrete framing.
+   See `./README.md` for the canonical Project Context. This file references it; do not duplicate.
+   ```
 
-   This section is the **north star** for the entire survey. It shapes not just which papers are included, but what is extracted from each paper (Phase 3 Project Relevance), how the taxonomy is organized (Phase 4), and how the executive summary is framed (Phase 5).
+   All downstream phases that refer to `## Project Context` should read it from `README.md`. The Project Context is the **north star** for the entire survey — it shapes which papers are included, what is extracted from each paper (Phase 3 Project Relevance), how the taxonomy is organized (Phase 4), and how the executive summary is framed (Phase 5).
 
-7. **Must Include / Project Context consistency check (mandatory):** After writing the `## Project Context` section, re-read each cluster listed under `## Must Include` in `requirements.md`. For each cluster, ask: *does the output type of this method class match what the Project Context defines as useful?* Specifically:
+7. **Must Include / Project Context consistency check (mandatory):** After confirming the `## Project Context` reference is in `requirements.md`, read the `## Project Context` section from `README.md` and re-read each cluster listed under `## Must Include` in `requirements.md`. For each cluster, ask: *does the output type of this method class match what the Project Context defines as useful?* Specifically:
    - Identify the **output type** the cluster produces (e.g., aggregate lift estimate, per-interaction credit score, time-to-event probability, binary treatment effect).
    - Compare it to the **output type the Project Context requires** (e.g., "continuous training label", "per-interaction credit score", "channel-level budget allocation input").
    - If there is a mismatch (the cluster produces output type A but the Project Context requires output type B), flag the contradiction to the user: state which cluster is misaligned, why, and suggest either (a) demoting it to a "Background only" tier (still survey, but do not allocate core paper budget) or (b) removing it from Must Include entirely.
@@ -489,7 +529,7 @@ Batch procedure (20 papers at a time):
      * filename rules (the full "Filename Rules" section from `/path/to/works/for/you/.claude/skills/paper-reader/SKILL.md`)
      * markdown file format (the full report template from `/path/to/works/for/you/.claude/skills/paper-reader/references/report-template.md`)
      * PDF download instructions (the full "PDF Download Instructions" section from this document)
-     * the `## Project Context` section from `requirements.md` (verbatim) — the subagent uses this to write the Project Relevance section for each paper
+     * the `## Project Context` section from `README.md` (verbatim) — the subagent uses this to write the Project Relevance section for each paper
      * data to extract for `method-tracker` updates:
        baseline list, variant list, performance numbers, number of components
      * project relevance extraction instructions:
@@ -623,7 +663,7 @@ Note: Start this phase only after Phase 3.7 is fully complete.
 
 Classify the collected papers into categories appropriate to the topic:
 
-* read the `## Project Context` section from `requirements.md` before defining categories
+* read the `## Project Context` section from `README.md` before defining categories
 * define categories around the core dimensions of the topic, informed by the project's specific needs and decision points — categories should map to aspects the project cares about, not just generic academic groupings
 * place 5–15 papers in each category
 * separate low-relevance papers into a `"References"` category
@@ -660,7 +700,7 @@ Use the format:
 The executive summary must include a `"Most Fundamental Methods"` section.
 Describe the top 5 methods based on the finalized `method-tracker` data.
 
-The executive summary must include an **"Implications for [Use Case]"** section (or **"Recommendations"** if the Project Context describes a specific project). This section directly answers the key questions or decision points stated in the `## Project Context` section of `requirements.md`, citing specific papers. For a general academic survey, this section summarizes the most actionable takeaways for the stated audience.
+The executive summary must include an **"Implications for [Use Case]"** section (or **"Recommendations"** if the Project Context describes a specific project). This section directly answers the key questions or decision points stated in the `## Project Context` section of `README.md`, citing specific papers. For a general academic survey, this section summarizes the most actionable takeaways for the stated audience.
 
 #### File 4: `method-tracker.md` (Methodology Fundamentality Tracking)
 
@@ -680,7 +720,7 @@ Evaluation method:
      (sufficient number of papers, sufficient analysis depth).
 3. Compute overall coverage as a percentage.
    Example: `"18 covered out of 20 requirement items = 90%"`
-4. **Project Context fitness check:** Re-read the `## Project Context` section in `requirements.md`. For each key statement in the Project Context (required output type, domain constraint, target variable type, use-case description), verify that at least one paper cluster in `literature-review.md` directly addresses it. A cluster "directly addresses" a statement if its papers produce the output type or solve the problem the statement describes. An unaddressed Project Context statement counts as a coverage gap regardless of keyword coverage percentage. List any unaddressed statements explicitly.
+4. **Project Context fitness check:** Re-read the `## Project Context` section in `README.md`. For each key statement in the Project Context (required output type, domain constraint, target variable type, use-case description), verify that at least one paper cluster in `literature-review.md` directly addresses it. A cluster "directly addresses" a statement if its papers produce the output type or solve the problem the statement describes. An unaddressed Project Context statement counts as a coverage gap regardless of keyword coverage percentage. List any unaddressed statements explicitly.
 
 Actions based on coverage:
 
@@ -695,6 +735,25 @@ Actions based on coverage:
   5. reevaluate coverage and stop only once coverage reaches ≥ 95%
 * Continue this loop until coverage ≥ 95%
 * However, if the total cumulative number of papers exceeds 500, report the status to the user and confirm whether to continue
+
+---
+
+## Final: Append to log.md
+
+After Phase 5 completes (whether final completion or paused for user input), prepend a dated entry (newest on top) to `[topic-slug]/log.md`. Create the file with header `# Log — <Topic>\n` if it doesn't exist.
+
+Entry format:
+
+```markdown
+## YYYY-MM-DD — literature-survey run (<initial | resume | rerun>)
+- Phase reached: <e.g. Phase 5 complete | Phase 3 paused at 80/200 papers>
+- Papers in queue: Done(N) / To Process(N) / Skipped(N)
+- Coverage: <X%> covered (project context fitness: <pass | gap on N statements>)
+- Outputs touched: literature-review.md, executive-summary.md, method-tracker.md
+- Notable: <one-line headline of the most significant finding or status>
+```
+
+This section runs unconditionally at the end of every invocation, including resumes and reruns — it's the audit trail.
 
 ---
 
@@ -764,7 +823,7 @@ In the `paper-reader` report template, ensure the following sections are present
 ## Project Relevance
 
 [Assessment of how this paper's method/findings address the project's specific needs
-as described in the Project Context section of requirements.md.
+as described in the Project Context section of README.md.
 If the paper does not meaningfully address the project's needs, prefix with:
 **Low project relevance.** [reason]]
 ```
@@ -824,10 +883,7 @@ Topic: [topic]
 
 ## Project Context
 
-[Always present. Written from the user's response to the Phase 1 Step 6 purpose prompt.
-For a project-specific survey: what the project is, how the survey output will be used, what 'relevant' means in project terms, valuable paper types.
-For a general academic survey: target audience, what decisions or understanding the survey should support.
-This section is the north star for extraction (Phase 3), taxonomy (Phase 4), and executive summary framing (Phase 5).]
+See `./README.md` for the canonical Project Context. This file references it; do not duplicate.
 
 ## Summary of Actual Search Results
 
@@ -978,7 +1034,7 @@ Criteria for "fundamental":
 
 ## Implications for [Use Case]
 
-[Read the ## Project Context section from requirements.md. Write 2–3 paragraphs directly answering the project's key questions or decision points, citing specific papers.
+[Read the ## Project Context section from README.md. Write 2–3 paragraphs directly answering the project's key questions or decision points, citing specific papers.
 For a general academic survey, summarize the most actionable takeaways for the stated audience.
 For a project-specific survey, frame recommendations around the project's practical constraints and goals.]
 

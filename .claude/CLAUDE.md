@@ -18,6 +18,26 @@ Example: if the user says "clean up the temp files", do NOT immediately delete t
 - **Proactive KB update:** After completing any non-trivial task (creating/modifying skills, agents, rules, or making design decisions), proactively run the kb-update skill BEFORE the user asks. Do not wait to be prompted. If the user says "save state" or "save status," the KB update must happen first — treat it as a mandatory pre-step to save-to-github. When genuinely unsure whether the task warrants an update, ask — but err on the side of updating rather than silently skipping.
 - **Fast-path first:** Before designing any delegation rule, routing condition, or trigger policy, ask: "Is there a 1-call pre-check that resolves the obvious cases mechanically?" Put that check first; apply judgment-based rules only for the ambiguous remainder.
 
+## Coding Behavior (Karpathy Principles)
+
+**Surface uncertainty before coding.** For any non-trivial implementation:
+- State assumptions explicitly before starting. If uncertain, ask — don't guess and implement.
+- If multiple valid interpretations exist, name them and ask which to pursue. Don't pick silently.
+- Push back when a simpler approach exists.
+
+**Surgical orphan cleanup.** When editing code:
+- Remove imports, variables, and functions that **your changes** made unused.
+- Do NOT remove pre-existing dead code — mention it as an aside instead.
+- Every changed line must trace directly to the user's request.
+- Match existing style, even if you'd do it differently.
+
+**Verifiable goals for multi-step tasks.** When a task has multiple steps, state a brief plan first:
+```
+1. [step] → verify: [how to check]
+2. [step] → verify: [how to check]
+```
+Transform ambiguous asks into concrete goals: "fix the bug" → "reproduce it with a test, then make it pass."
+
 ## File Reading — Protect Context Window
 
 Before reading any file, check its size with `ls -la <path>` (one bash call, negligible cost), then apply:
@@ -87,6 +107,38 @@ Any agentic loop must have explicit termination guards:
 2. **Replan escape hatch:** If `needs_replan: true` returns from critic on two consecutive rounds, surface to user rather than replanning.
 3. **Plateau signal:** If the best metric does not improve over 3 consecutive rounds, pause and surface to user.
 4. **No silent recovery:** If a subagent errors on retry 3+, escalate to lead and surface to user.
+
+## Secrets Policy — One Sanctioned Home
+
+**The only sanctioned location for secrets is `~/.claude/<service>_api_key`** (one key per file, key on line 1, loaded at runtime by a launcher script — see `~/.claude/run-gemini-chat-mcp.sh` for the pattern).
+
+By design, **`/path/to/works/for/you/knowledge_base/` and `/path/to/works/for/you/Projects/paper_reading_repo/` are key-free zones.** They contain notes, summaries, and survey outputs — never credentials.
+
+**When a secret enters the conversation** (user pastes a key/token, or you encounter one in a file outside `~/.claude/`):
+
+1. **Stop. Do not echo the value back** in any subsequent message, file write, or commit.
+2. **Tell the user** the canonical home is `~/.claude/<service>_api_key` (line 1, one key per file). Name the file by the service (`gemini_api_key`, `openai_api_key`, etc.).
+3. **Offer to write it there** and add a launcher script if missing (mirror `run-gemini-chat-mcp.sh`).
+4. **Never** write secrets into `knowledge_base/`, `paper_reading_repo/`, project notes, code committed to any repo, commit messages, or PR descriptions.
+5. If a secret was already pasted into chat history, **recommend the user rotate it** — `~/.claude/history.jsonl` is gitignored but lives on disk.
+
+**Enforcement at checkpoint** (handled by `save-to-github`):
+- `~/.claude/` → deep per-file diff review (small changeset, fine to read).
+- `knowledge_base/` and `paper_reading_repo/` → cheap mechanical scan via `~/.claude/tools/secret-scan.sh` (single source of truth for patterns). Zero matches → proceed; any match → investigate, then apply the secret-handling steps above.
+
+The scanner honors `.secret-scan-allowlist` (per-repo, paths to skip) and inline `secret-scan: example` markers (for documentation lines that legitimately show a pattern).
+
+## Repo Path References — Single Source of Truth
+
+The canonical registry of local repository paths is `/path/to/works/for/you/knowledge_base/context/repos.md`. Resolve paths via the `fetch-repo-path` skill at runtime.
+
+**Never hardcode absolute paths to registered repos** in skills, agents, memory files, or KB notes. Drift across multiple hardcoded copies is the failure mode this rule prevents.
+
+- **In skills/agents:** resolve the path via `fetch-repo-path` before writing any file. Output specs should read like `<repo-name>/path/to/file`, not `/path/to/works/for/you/Projects/.../<repo>/path/to/file`.
+- **In KB notes:** reference files inside a registered repo using the relative form `<repo-name>/path/to/file` (e.g. `paper_reading_repo/literature-survey/<topic>/`). The absolute path lives in `repos.md` only.
+- **Exception:** `repos.md` itself, and a one-time deprecation note pointing an old location to a new one.
+
+If you need a registered repo's absolute path and don't already know it, invoke `fetch-repo-path` — do not guess.
 
 ## Context Window Hygiene
 

@@ -44,9 +44,9 @@ You are a **knowledge base auditor**. You review an assigned scope of the KB and
 
 ### Convention (README + log.md)
 
-For each **project folder** under `projects/` (including `ad_hoc/`):
+For each **KB folder** that contains a `README.md` (including `context/`, `preference/`, `projects/`, subfolders, and `ad_hoc/`):
 
-1. **Missing `log.md`** — Flag `[CONVENTION]` if the folder contains topic `.md` files (or a `README.md`) but has no `log.md`. (New folders should get `log.md` on first `kb-update` or via `create-ad-hoc-project`.)
+1. **Missing `log.md`** — Flag `[CONVENTION]` if the folder contains a `README.md` but has no `log.md`. (New folders should get `log.md` on first `kb-update`, via `create-ad-hoc-project`, or via `kb-organizer`.)
 2. **Chronological headings in `README.md`** — If `README.md` contains lines like `## [YYYY-MM-DD]` or a `## Progress Log` / dated session dumps, flag `[CONVENTION]` — chronological content belongs in `log.md`, not `README.md`.
 3. **Append-only for `log.md`** — The lead can verify with `git log -p -- <path>/log.md`. If you detect duplicate or conflicting same-date entries when reading `log.md`, flag `[CONVENTION]`. Full git history checks are optional (read-only tools may not include git).
 

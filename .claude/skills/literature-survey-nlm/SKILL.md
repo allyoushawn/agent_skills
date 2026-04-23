@@ -18,6 +18,7 @@ This skill processes abundant information across many phases. **Failure to deleg
 | Phase | Delegation |
 |-------|-----------|
 | Phase 0 (state detection) | Inline — read-only and brief |
+| Phase 0.5 (ensure README.md) | Inline — interactive prompt + small write |
 | Phase 1 (requirements + search strategy) | Delegate to subagent |
 | Phase 2 (paper discovery) | Delegate to subagent |
 | Phase 3 (per-paper NLM analysis) | Per-batch subagents (3–5 papers each) — follow Phase 3 delegation model exactly |
@@ -89,6 +90,8 @@ overflow_notebooks:
 
 ```text
 [paper-reading-repo]/literature-survey/[topic-slug]/
+├── README.md                    ← Persistent topic context (why surveyed, audience, project framing)
+├── log.md                       ← Append-only run journal
 ├── requirements.md
 ├── notebooklm-state.md          ← NLM notebook state
 ├── literature-review.md
@@ -112,6 +115,8 @@ If the output folder does not exist, skip this phase and start from Phase 1.
 
 Check whether the following files exist in the output folder:
 
+- `README.md`
+- `log.md`
 - `requirements.md`
 - `queue.md`
 - `notebooklm-state.md`
@@ -121,6 +126,8 @@ Check whether the following files exist in the output folder:
 - `read-papers/` folder and the number of `.md` files inside it
 
 If `notebooklm-state.md` is present, read the `notebook_id` and verify it via `notebook_get`. Report the NLM notebook status (notebook title, source count, whether it exists) alongside other resume state.
+
+The presence of `README.md` and `log.md` does not gate state determination, but report their status to the user during the resume-state report (e.g. "README.md present — Project Context loaded", "log.md has N prior run entries").
 
 ### 0-2. Determine Progress State
 
@@ -165,6 +172,37 @@ If the user requests "start from scratch," either suggest a new folder name whil
 
 ---
 
+## Phase 0.5: Ensure README.md exists
+
+This phase runs whether or not the folder is fresh. It supersedes the standalone Phase 1 Step 6 "Project Context" prompt.
+
+- If `[topic-slug]/README.md` does NOT exist:
+  - Prompt the user for:
+    - (a) Why this topic is being surveyed — what triggered it, what decision it should support
+    - (b) Audience — who consumes this survey (just you, your team, decision-makers, etc.)
+    - (c) Project Context — the same content the original Phase 1 Step 6 prompt asks for: if for a specific project, describe the project, how the survey output will be used, what 'relevant' means in project terms (e.g., 'a method is useful if its output can serve as continuous training labels'), and any paper types that are especially valuable even if not top-venue. If a general academic survey, describe the target audience and what decisions or understanding the survey should support.
+  - Write `README.md` using this template:
+
+```markdown
+# Literature Survey Topic — <Topic>
+
+**Created:** YYYY-MM-DD
+
+## Why surveyed
+[user's answer to (a)]
+
+## Audience
+[user's answer to (b)]
+
+## Project Context
+[user's answer to (c) — this is the north star for extraction (Phase 3 Query 3), synthesis (Phase 4 Queries 6–7), and executive summary framing (Phase 5)]
+```
+
+- If `[topic-slug]/README.md` already exists: read it. The `## Project Context` section is the canonical source.
+- In all subsequent phases that reference `## Project Context`, read it from `README.md`. `requirements.md` may include a one-line pointer (`Project Context: see ./README.md`) instead of duplicating the section.
+
+---
+
 ## Phase 1: Preparation and Search Strategy Setup
 
 1. Create the output folder and the `read-papers/` subfolder if they do not exist.
@@ -176,17 +214,17 @@ If the user requests "start from scratch," either suggest a new folder name whil
    If the user requests revisions, reflect them and confirm again.
    Only after user approval may you proceed to Phase 2.
 
-6. **Survey purpose prompt (mandatory):** Ask the user:
+6. **Project Context (already collected in Phase 0.5):** Project Context is collected and persisted in `README.md` during Phase 0.5. Do not re-prompt here. In `requirements.md`, include a one-line reference instead of duplicating the section:
 
-   > "What is the intended use of this survey?
-   > (a) If for a specific project: describe what the project is, how the survey output will be used, what 'relevant' means in your project's terms (e.g., 'a method is useful if its output can serve as continuous training labels'), and any paper types that are especially valuable even if not top-venue (e.g., industry papers from the same domain).
-   > (b) If a general academic survey: describe the target audience and what decisions or understanding the survey should support."
+   ```markdown
+   ## Project Context
 
-   Append a `## Project Context` section to `requirements.md` with the user's response. This section is always present — for a general survey it captures audience and goals; for a project-specific survey it captures the concrete framing.
+   See `./README.md` for the canonical Project Context. This file references it; do not duplicate.
+   ```
 
-   This section is the **north star** for the entire survey. It shapes not just which papers are included, but what is extracted from each paper (Phase 3 Query 3), how findings are synthesized (Phase 4 Queries 6–7), and how the executive summary is framed (Phase 5).
+   All downstream phases that refer to `## Project Context` should read it from `README.md`. The Project Context is the **north star** for the entire survey — it shapes which papers are included, what is extracted from each paper (Phase 3 Query 3), how findings are synthesized (Phase 4 Queries 6–7), and how the executive summary is framed (Phase 5).
 
-7. **Must Include / Project Context consistency check (mandatory):** After writing the `## Project Context` section, re-read each cluster listed under `## Must Include` in `requirements.md`. For each cluster, ask: *does the output type of this method class match what the Project Context defines as useful?* Specifically:
+7. **Must Include / Project Context consistency check (mandatory):** After confirming the `## Project Context` reference is in `requirements.md`, read the `## Project Context` section from `README.md` and re-read each cluster listed under `## Must Include` in `requirements.md`. For each cluster, ask: *does the output type of this method class match what the Project Context defines as useful?* Specifically:
    - Identify the **output type** the cluster produces (e.g., aggregate lift estimate, per-interaction credit score, time-to-event probability, binary treatment effect).
    - Compare it to the **output type the Project Context requires** (e.g., "continuous training label", "per-interaction credit score", "channel-level budget allocation input").
    - If there is a mismatch (the cluster produces output type A but the Project Context requires output type B), flag the contradiction to the user: state which cluster is misaligned, why, and suggest either (a) demoting it to a "Background only" tier (still survey, but do not allocate core paper budget) or (b) removing it from Must Include entirely.
@@ -452,7 +490,7 @@ Use **independent queries** — do NOT use `conversation_id` threading. This pre
 
 **Query 3 (project-specific)** — scope with `source_ids=[<source_id>]`:
 
-The batch subagent **dynamically formulates** this query from the `## Project Context` section in `requirements.md`. It must probe whether and how this paper's method/findings address the project's specific needs — referencing the concrete framing (e.g., label type, noise model, downstream goal, audience questions), not just repeating the topic generically.
+The batch subagent **dynamically formulates** this query from the `## Project Context` section in `README.md`. It must probe whether and how this paper's method/findings address the project's specific needs — referencing the concrete framing (e.g., label type, noise model, downstream goal, audience questions), not just repeating the topic generically.
 
 This query runs for **all** papers unconditionally. If the answer indicates the paper does not address the project need, that is a useful signal — it flags a retrieval-phase relevance mismatch, not a query design problem.
 
@@ -579,7 +617,7 @@ Query the full notebook with no `source_ids` filter (all papers). Use these 5 qu
 4. "Which papers appear to be the most foundational — cited by or built upon by many others in this notebook? List them with brief explanations."
 5. "Is any paper's method used as a direct baseline by other papers in this notebook? Map method name → list of papers that use it as a baseline."
 
-**Queries 6–7 (project-specific synthesis)** — dynamically formulated by the Phase 4 subagent from the `## Project Context` section in `requirements.md`. The subagent reads the Project Context and writes 1–2 cross-paper queries (no `source_ids` filter) that synthesize the notebook's papers through the lens of the project's specific needs. Examples: "Which methods in this notebook are applicable when labels are [project-specific label type]?" or "What does the collective evidence say about [project-specific concern]?" These become additional building blocks for `literature-review.md`.
+**Queries 6–7 (project-specific synthesis)** — dynamically formulated by the Phase 4 subagent from the `## Project Context` section in `README.md`. The subagent reads the Project Context and writes 1–2 cross-paper queries (no `source_ids` filter) that synthesize the notebook's papers through the lens of the project's specific needs. Examples: "Which methods in this notebook are applicable when labels are [project-specific label type]?" or "What does the collective evidence say about [project-specific concern]?" These become additional building blocks for `literature-review.md`.
 
 ### 4-B: Claude Structures into literature-review.md
 
@@ -615,7 +653,7 @@ Every claim and recommendation must explicitly cite sources using the paper's fu
 
 The executive summary must include a "Most Fundamental Methods" section describing the top 5 methods from the finalized `method-tracker`.
 
-The executive summary must include an **"Implications for [Use Case]"** section (or **"Recommendations"** if the Project Context describes a specific project). This section directly answers the key questions or decision points stated in the `## Project Context` section of `requirements.md`, citing specific papers. For a general academic survey, this section summarizes the most actionable takeaways for the stated audience.
+The executive summary must include an **"Implications for [Use Case]"** section (or **"Recommendations"** if the Project Context describes a specific project). This section directly answers the key questions or decision points stated in the `## Project Context` section of `README.md`, citing specific papers. For a general academic survey, this section summarizes the most actionable takeaways for the stated audience.
 
 **Optional NLM sanity check:** After drafting `executive-summary.md`, query NLM with no `source_ids` filter: "Summarize the state of the field based on all sources in this notebook." Compare against the draft and flag any notable discrepancies.
 
@@ -630,7 +668,7 @@ After drafting File 2 and File 3, before stopping, evaluate coverage:
 1. List all items specified in `requirements.md` under "Request", "Must Include", and "Core Keywords".
 2. Evaluate how well `literature-review.md` and `executive-summary.md` cover each item. The criterion for "covered" is whether enough evidence exists for decision-making.
 3. Compute overall coverage as a percentage. Example: `"18 covered out of 20 requirement items = 90%"`
-4. **Project Context fitness check:** Re-read the `## Project Context` section in `requirements.md`. For each key statement in the Project Context (required output type, domain constraint, target variable type, use-case description), verify that at least one paper cluster in `literature-review.md` directly addresses it. A cluster "directly addresses" a statement if its papers produce the output type or solve the problem the statement describes. An unaddressed Project Context statement counts as a coverage gap regardless of keyword coverage percentage. List any unaddressed statements explicitly.
+4. **Project Context fitness check:** Re-read the `## Project Context` section in `README.md`. For each key statement in the Project Context (required output type, domain constraint, target variable type, use-case description), verify that at least one paper cluster in `literature-review.md` directly addresses it. A cluster "directly addresses" a statement if its papers produce the output type or solve the problem the statement describes. An unaddressed Project Context statement counts as a coverage gap regardless of keyword coverage percentage. List any unaddressed statements explicitly.
 
 **Actions based on coverage:**
 
@@ -643,6 +681,26 @@ After drafting File 2 and File 3, before stopping, evaluate coverage:
   5. Reevaluate coverage and stop only once coverage reaches ≥ 95%
 - Continue this loop until coverage ≥ 95%.
 - However, if the total cumulative number of papers exceeds 500, report the status to the user and confirm whether to continue.
+
+---
+
+## Final: Append to log.md
+
+After Phase 5 completes (whether final completion or paused for user input), prepend a dated entry (newest on top) to `[topic-slug]/log.md`. Create the file with header `# Log — <Topic>\n` if it doesn't exist.
+
+Entry format:
+
+```markdown
+## YYYY-MM-DD — literature-survey-nlm run (<initial | resume | rerun>)
+- Phase reached: <e.g. Phase 5 complete | Phase 3 paused at 80/200 papers>
+- Papers in queue: Done(N) / To Process(N) / Skipped(N)
+- Coverage: <X%> covered (project context fitness: <pass | gap on N statements>)
+- Outputs touched: literature-review.md, executive-summary.md, method-tracker.md
+- NLM notebook source count: <N> (added <delta> this run)
+- Notable: <one-line headline of the most significant finding or status>
+```
+
+This section runs unconditionally at the end of every invocation, including resumes and reruns — it's the audit trail.
 
 ---
 

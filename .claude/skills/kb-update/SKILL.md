@@ -42,9 +42,9 @@ Only update it when:
 ### Skills and memory — behavior rules
 Skills (`~/.claude/skills/`) and memory (`~/.claude/memory/`) are the authoritative place for behavior rules. Never duplicate them into `claude-workflow.md`.
 
-## File management in `projects/`
+## File management in KB folders
 
-Every project folder under `projects/` has two structural files:
+Every folder in the KB has two structural files:
 
 - **`README.md` (Compiled Truth)** — current state, goals, open threads. Rewritable; never use it as a chronological progress log.
 - **`log.md` (append-only timeline)** — one line per notable event: `## [YYYY-MM-DD] <type> | <one-liner>`. Types: `init`, `ingest`, `decision`, `refactor`, `experiment`, `feedback`, `lint`. Never rewrite or delete past entries; if a prior entry is wrong, append a new line with type `feedback` describing the correction.
@@ -74,10 +74,10 @@ If none of these triggers apply, skip silently — don't ask.
 1. Identify what changed this session that is worth retaining
 2. For each piece of content to write, spawn the **kb-librarian** agent (via Agent tool) with a description of the content. The kb-librarian will scan the KB, read candidate files to verify their actual scope, and return a concrete routing recommendation (append to existing file or create new file). Skip pieces that are already captured in a skill or memory, or belong in `claude-workflow.md` only if not captured elsewhere.
 3. Present the kb-librarian's routing recommendation(s) to the user: "kb-librarian recommends writing X to file Y because Z." Wait for approval before writing anything.
-4. **Write and log** (for each approved write into a `projects/<name>/` folder):
+4. **Write and log** (for each approved write into any KB folder):
    1. Write the topic note to the approved file — include the *why* (design context), not just the *what*.
-   2. **Ensure `log.md` exists** in that project folder. If missing, create it with a single seed line: `## [YYYY-MM-DD] init | <short project label from README title or folder name>`. A missing `log.md` means the folder has not yet been migrated to this convention — create it before appending.
-   3. **Append** one line to `log.md`: `## [YYYY-MM-DD] <type> | <one-liner>` where `<type>` is one of `ingest`, `decision`, `refactor`, `experiment`, `feedback`, `lint` (use the best fit for this session). **Never edit or remove prior lines** in `log.md`.
+   2. **Ensure `log.md` exists** in that KB folder. If missing, create it with a single seed line: `## [YYYY-MM-DD] init | <short label from the folder name or README title>`. A missing `log.md` means the folder has not yet been migrated to this convention — create it before appending.
+   3. **Append** one line to `log.md`: `## [YYYY-MM-DD] <type> | <one-liner>` where `<type>` is one of `add`, `update`, `remove`, `ingest`, `decision`, `refactor`, `experiment`, `feedback`, `lint` (use the best fit for this session). Use `add`/`update`/`remove` for `context/` and `preference/` folder changes (file added, significantly revised, or deleted); use the richer project types for `projects/` work. **Never edit or remove prior lines** in `log.md`.
    4. If a past `log.md` entry must be corrected, append a **new** line with type `feedback` — do not rewrite history.
 
 5. After writing, invoke the **kb-organizer** agent (via Agent tool) with `scope = <the folder you just wrote to>`. Wait for its change report. This refreshes the folder's KB_INDEX and propagates topic changes to ancestor READMEs. If kb-organizer reports a "Suggested Reorganization", include it in your summary to the user but do not act on it without explicit instruction.

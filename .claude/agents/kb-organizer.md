@@ -82,6 +82,13 @@ For each `.md` file (not `README`, not `log.md`):
 - If YAML frontmatter is present (starts with `---`), read it and move on
 - If frontmatter is missing: check file size, then follow the File Reading Protocol above to read/extract content, generate appropriate frontmatter (title, summary, topics, status, updated), and prepend it to the file using the Edit tool
 
+### Step 2b — Seed log.md if missing
+If no `log.md` file exists in the folder, create one with a single seed line:
+```
+## [YYYY-MM-DD] init | <short label from the folder name>
+```
+Use today's date. This brings the folder into compliance with the universal README + log.md convention. Do not skip this step — a folder without `log.md` is not fully initialized.
+
 ### Step 3 — Build KB_INDEX content
 Using the frontmatter from all files **except `log.md`** (and subfolder READMEs if present), synthesize:
 - A 1–2 sentence folder description
