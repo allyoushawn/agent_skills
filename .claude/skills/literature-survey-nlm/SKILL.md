@@ -7,6 +7,16 @@ description: "NotebookLM-backed literature survey skill. Token-efficient alterna
 
 Performs a structured literature survey on a given topic using NotebookLM for per-paper analysis. Saves all outputs under the paper reading repo.
 
+## References (load when relevant)
+
+- `kb/context/literature-survey/literature-survey-priorities.md` — venue list, paper priority rules, topic relevance, method fundamentality weight, accessibility principle
+- `kb/context/literature-survey/literature-survey-templates.md` — output file templates (requirements, literature-review, method-tracker, executive-summary) and per-paper additions (Project Relevance, Reverse Citation Map)
+- `kb/context/literature-survey/literature-survey-conventions.md` — topic-slug naming, folder structure, queue.md format (incl. NLM `nlm:` column), Phase 0 resume detection, Phase 0.5 README, Phase 1 Must-Include consistency check, Phase 3.5/3.7, Phase 5 coverage evaluation, log.md final entry, writing principles
+- `kb/context/literature-survey/literature-survey-discovery.md` — Awesome repo Step 0, web search query patterns, engineering blog list, queue depletion strategy, rate-limit handling
+- `~/.claude/skills/notebooklm/SKILL.md` — NotebookLM tools and usage patterns
+- `~/.claude/skills/paper-reader/SKILL.md` — filename rules, report template, writing notes (read at runtime, apply latest)
+- `~/.claude/skills/cli-review/SKILL.md` — CLI review dispatch via Gemini CLI (large corpus analysis, synthesis); used in Phases 3.7, 4-B, and 5
+
 ## Delegation Architecture (Enforced)
 
 This skill processes abundant information across many phases. **Failure to delegate at every level causes the plan to be lost from context.** Two mandatory delegation rules:
@@ -27,7 +37,7 @@ This skill processes abundant information across many phases. **Failure to deleg
 | Phase 4 (literature review synthesis) | Delegate to subagent |
 | Phase 5 (executive summary) | Delegate to subagent |
 
-Each per-phase brief must be fully self-contained: output folder path, `notebook_id` from `notebooklm-state.md`, verbatim content of relevant files (`requirements.md`, `queue.md`), and the specific phase instructions from this document. End every brief with: "Return only: one sentence confirming the phase completed, or a one-line error. No other output."
+Each per-phase brief must be fully self-contained: output folder path, `notebook_id` from `notebooklm-state.md`, verbatim content of relevant files (`requirements.md`, `queue.md`), and the specific phase instructions from this document plus the relevant kb/context references. End each brief per CLAUDE.md § "Subagent Output Protocol" (one sentence confirming completion or one-line error).
 
 ## Usage
 
@@ -35,21 +45,15 @@ Each per-phase brief must be fully self-contained: output folder path, `notebook
 
 - `<topic>`: topic to investigate (required).
   Examples: `"model cascading in ML systems"`, `"prevalence sampling for imbalanced classification"`
-- `[topic-slug]`: folder name for the topic (optional). If omitted, it is automatically generated from the topic
-  (lowercase, spaces → hyphens, special characters removed).
-  Example: `"model cascading in ML systems"` → `model-cascading-in-ml-systems`
+- `[topic-slug]`: folder name for the topic (optional). Topic-slug naming rules in `kb/context/literature-survey/literature-survey-conventions.md`.
 
-Outputs are saved under `[paper-reading-repo]/literature-survey/[topic-slug]/`.
+Outputs are saved under `[paper-reading-repo]/literature-survey/[topic-slug]/`. Resolve `[paper-reading-repo]` via the `fetch-repo-path` skill.
 
 Examples:
 - `/literature-survey-nlm model cascading in ML systems`
   → `literature-survey/model-cascading-in-ml-systems/`
-- `/literature-survey-nlm model cascading in ML systems model-cascading`
-  → `literature-survey/model-cascading/`
 - `/literature-survey-nlm backward compatible embeddings bce`
   → `literature-survey/bce/`
-
----
 
 ## Prerequisites (checked at the start of every run)
 
@@ -59,11 +63,9 @@ Examples:
 
    Abort the skill.
 
-2. **Resolve paper-reading repo path:** Read `/path/to/works/for/you/knowledge_base/context/repos.md` and find the "Paper Reading Repo" entry. This is `[paper-reading-repo]`.
+2. **Resolve paper-reading repo path:** Read `/path/to/works/for/you/knowledge_base/context/registry/repos.md` and find the "Paper Reading Repo" entry. This is `[paper-reading-repo]`.
 
 3. **Output root:** `[paper-reading-repo]/literature-survey/[topic-slug]/`
-
----
 
 ## Notebook Lifecycle
 
@@ -84,131 +86,27 @@ overflow_notebooks:
   - [topic-slug]-overflow-1: <id>
 ```
 
----
-
 ## Folder Structure
 
-```text
-[paper-reading-repo]/literature-survey/[topic-slug]/
-├── README.md                    ← Persistent topic context (why surveyed, audience, project framing)
-├── log.md                       ← Append-only run journal
-├── requirements.md
-├── notebooklm-state.md          ← NLM notebook state
-├── literature-review.md
-├── executive-summary.md
-├── method-tracker.md
-├── queue.md                     ← sole truth for nlm_source_id per paper
-└── read-papers/
-    └── YYYY_Venue_Method_Title.md
-```
-
-PDFs are excluded from git via `.gitignore` (`literature-survey/**/*.pdf`) — only markdown files are tracked.
-
----
+See `kb/context/literature-survey/literature-survey-conventions.md` for the standard folder layout. The NLM variant adds one extra file at the topic root: `notebooklm-state.md`.
 
 ## Phase 0: Detect Existing Outputs and Determine State (Resume Mode)
 
-If the output folder already exists, run this phase first.
-If the output folder does not exist, skip this phase and start from Phase 1.
+If the output folder already exists, run this phase first; otherwise skip to Phase 1.
+Full procedure (scan files, determine progress state, resume Phase 3 logic, user confirmation): see Phase 0 section in `kb/context/literature-survey/literature-survey-conventions.md`.
 
-### 0-1. Scan Existing Files
-
-Check whether the following files exist in the output folder:
-
-- `README.md`
-- `log.md`
-- `requirements.md`
-- `queue.md`
-- `notebooklm-state.md`
-- `method-tracker.md`
-- `literature-review.md`
-- `executive-summary.md`
-- `read-papers/` folder and the number of `.md` files inside it
-
-If `notebooklm-state.md` is present, read the `notebook_id` and verify it via `notebook_get`. Report the NLM notebook status (notebook title, source count, whether it exists) alongside other resume state.
-
-The presence of `README.md` and `log.md` does not gate state determination, but report their status to the user during the resume-state report (e.g. "README.md present — Project Context loaded", "log.md has N prior run entries").
-
-### 0-2. Determine Progress State
-
-Determine the interrupted phase based on the following criteria:
-
-| Condition | Interpretation | Resume From |
-|-----------|---------------|-------------|
-| Only requirements exists, no queue | Phase 1 complete, Phase 2 not started | Start from Phase 2 |
-| Queue exists, but `read-papers/` is empty or missing | Phase 2 complete, Phase 3 not started | Start from Phase 3 |
-| Queue exists, and `read-papers/` contains `.md` files | Phase 3 in progress | Resume Phase 3 (see 0-3 below) |
-| `method-tracker` contains a "Top Method Analysis" section | Phase 3.5 complete | Start from Phase 3.7 |
-| `read-papers/` `.md` files contain a filled "Reverse Citation Map" table | Phase 3.7 complete | Start from Phase 4 |
-| `literature-review` exists, `executive-summary` does not | Phase 4 complete | Start from Phase 5 |
-| `executive-summary` exists | Phase 5 complete or in progress | Start with coverage evaluation |
-
-### 0-3. Resume Phase 3 (If Batch Processing Was Interrupted)
-
-If Phase 3 was in progress, determine the exact status:
-
-1. Read `queue.md` and count the number of papers in the "Done" section.
-2. Count the number of `.md` files in the `read-papers/` folder.
-3. Check the number of remaining papers in the "To Process" section.
-4. Report the status to the user:
-
-```text
-[Resume] Existing progress detected:
-   - Processed: X papers
-   - read-papers/ files: Y
-   - Remaining: Z papers
-   - Target: N papers
-   - NLM notebook: [notebook_id] — [source count] sources loaded
-   Resuming Phase 3 batch processing.
-```
-
-5. Resume Phase 3 batch processing starting from the top papers in the "To Process" list.
-
-### 0-4. User Confirmation
-
-Show the user the result of the state determination and ask whether to continue.
-
-If the user requests "start from scratch," either suggest a new folder name while preserving the existing folder, or reset the existing files with user approval.
-
----
+NLM-specific addition during 0-1: if `notebooklm-state.md` is present, read the `notebook_id` and verify it via `notebook_get`. Report the NLM notebook status (notebook title, source count, whether it exists) alongside other resume state.
 
 ## Phase 0.5: Ensure README.md exists
 
-This phase runs whether or not the folder is fresh. It supersedes the standalone Phase 1 Step 6 "Project Context" prompt.
-
-- If `[topic-slug]/README.md` does NOT exist:
-  - Prompt the user for:
-    - (a) Why this topic is being surveyed — what triggered it, what decision it should support
-    - (b) Audience — who consumes this survey (just you, your team, decision-makers, etc.)
-    - (c) Project Context — the same content the original Phase 1 Step 6 prompt asks for: if for a specific project, describe the project, how the survey output will be used, what 'relevant' means in project terms (e.g., 'a method is useful if its output can serve as continuous training labels'), and any paper types that are especially valuable even if not top-venue. If a general academic survey, describe the target audience and what decisions or understanding the survey should support.
-  - Write `README.md` using this template:
-
-```markdown
-# Literature Survey Topic — <Topic>
-
-**Created:** YYYY-MM-DD
-
-## Why surveyed
-[user's answer to (a)]
-
-## Audience
-[user's answer to (b)]
-
-## Project Context
-[user's answer to (c) — this is the north star for extraction (Phase 3 Query 3), synthesis (Phase 4 Queries 6–7), and executive summary framing (Phase 5)]
-```
-
-- If `[topic-slug]/README.md` already exists: read it. The `## Project Context` section is the canonical source.
-- In all subsequent phases that reference `## Project Context`, read it from `README.md`. `requirements.md` may include a one-line pointer (`Project Context: see ./README.md`) instead of duplicating the section.
-
----
+Runs whether or not the folder is fresh. Supersedes the Phase 1 Step 6 "Project Context" prompt. Full prompt and README.md template: see Phase 0.5 section in `kb/context/literature-survey/literature-survey-conventions.md`.
 
 ## Phase 1: Preparation and Search Strategy Setup
 
 1. Create the output folder and the `read-papers/` subfolder if they do not exist.
 2. Extract 3–6 core keywords from the topic.
-3. Decide the search strategy based on the criteria below.
-4. Once the search strategy is decided, immediately create `requirements.md`.
+3. Decide the search strategy based on the criteria in `kb/context/literature-survey/literature-survey-priorities.md` (relevant venues by area, paper prioritization, method fundamentality weight).
+4. Once the search strategy is decided, immediately create `requirements.md` using the template in `kb/context/literature-survey/literature-survey-templates.md`.
    This file must record the user-requested topic, extracted keywords, selected venues/blogs, search queries, and survey scope constraints.
 5. After creating the requirements file, show its contents to the user and get confirmation.
    If the user requests revisions, reflect them and confirm again.
@@ -224,186 +122,15 @@ This phase runs whether or not the folder is fresh. It supersedes the standalone
 
    All downstream phases that refer to `## Project Context` should read it from `README.md`. The Project Context is the **north star** for the entire survey — it shapes which papers are included, what is extracted from each paper (Phase 3 Query 3), how findings are synthesized (Phase 4 Queries 6–7), and how the executive summary is framed (Phase 5).
 
-7. **Must Include / Project Context consistency check (mandatory):** After confirming the `## Project Context` reference is in `requirements.md`, read the `## Project Context` section from `README.md` and re-read each cluster listed under `## Must Include` in `requirements.md`. For each cluster, ask: *does the output type of this method class match what the Project Context defines as useful?* Specifically:
-   - Identify the **output type** the cluster produces (e.g., aggregate lift estimate, per-interaction credit score, time-to-event probability, binary treatment effect).
-   - Compare it to the **output type the Project Context requires** (e.g., "continuous training label", "per-interaction credit score", "channel-level budget allocation input").
-   - If there is a mismatch (the cluster produces output type A but the Project Context requires output type B), flag the contradiction to the user: state which cluster is misaligned, why, and suggest either (a) demoting it to a "Background only" tier (still survey, but do not allocate core paper budget) or (b) removing it from Must Include entirely.
-   - Only proceed to Phase 2 after the user has confirmed or revised the Must Include list following this check.
-
-- Core keyword groups: different phrasings of the topic, related concepts
-- Most relevant venue list (selected from the list below)
-- Engineering blogs to search
-
-**Relevant conferences/journals by area:**
-
-- General ML: NeurIPS, ICML, ICLR, MLSys
-- Systems: OSDI, SOSP, EuroSys, VLDB, SIGMOD
-- Computer Vision: CVPR, ICCV, ECCV
-- NLP: ACL, EMNLP, NAACL
-- Recommender Systems: RecSys, WWW, KDD
-- Software Engineering: ICSE, FSE, ASE
-- Signal Processing: ICASSP, Interspeech
-
-### Paper Prioritization Criteria
-
-When processing discovered papers, use the following priority order. Higher-priority papers are analyzed in more depth in Phase 3 (`read-papers/`), while lower-priority ones are mentioned only briefly.
-
-#### Topic Relevance (Highest-Priority Filter)
-
-This takes precedence over venue or citation count. Papers with low relevance should be ranked lower even if they are from top venues.
-
-Relevance levels (judge by title, abstract, and introduction):
-
-- **Core**: directly addresses the survey topic. The keywords specified in `requirements` are central to the paper's contribution.
-  → no demotion (default)
-- **Related**: adjacent to the topic but does not directly address it. Useful for background understanding or comparison.
-  → demote by one level from priorities 1/2/3/4 below
-- **Peripheral**: only indirectly connected to the topic.
-  → demote by two levels from priorities 1/2/3/4 below. If demotion pushes it below priority 3, treat it as "excluded."
-
-When adding a paper to the queue, mark relevance as `[Core/Related/Peripheral]`. Later, during batch processing, reevaluate based on the actual abstract and adjust priority as needed.
-
-#### Base Priority by Venue / Institution
-
-**Priority 1 — highest priority:**
-
-- Papers published at NeurIPS, ICML, ICLR
-- Papers from venues with Google Scholar h5-index ≥ 100
-  (e.g. NeurIPS, ICML, ICLR, CVPR, ACL, EMNLP)
-- Papers authored by researchers from big tech organizations such as Google, Meta/FAIR, Microsoft Research, DeepMind, Apple, Amazon, OpenAI, etc.
-
-**Priority 2 — next to process:**
-
-- Papers published at CVPR, KDD
-- Papers from venues with Google Scholar h5-index ≥ 100 but not already included in Priority 1
-- Papers with 100+ citations, regardless of venue
-
-**Priority 3 — supplementary materials:**
-
-- Papers from major venues such as ICCV, ECCV, WWW, RecSys, EMNLP, NAACL, SIGMOD, VLDB
-- arXiv preprints with prominent authors or big-tech affiliations and 50+ citations
-
-**Priority 4 — reference-only**
-(If any of the following applies, force-assign Priority 4):
-
-- Papers from other venues or low-citation arXiv preprints
-- Not published at a top conference (Priority 1 venues) and not affiliated with big tech / well-known research institutions
-- Papers authored by researchers from Chinese universities without company affiliation
-  (due to reproducibility concerns)
-- However, if the paper is published in a conference venue and has 200+ citations, it may be promoted to Priority 3
-
-For each discovered paper, check citation counts via Semantic Scholar or Google Scholar and determine priority.
-
-**Secondary condition by year:**
-
-- Prefer recent papers (within the last 5 years). Within the same priority level, process newer papers first.
-- Papers older than 5 years should only be included if they have significantly high citation counts (roughly 500+, or clearly above the field average).
-- However, seminal works such as the original ViT paper should be included regardless of year/citations.
-
-### Method Fundamentality Weight
-
-Separately from the priority above, assign the following weights based on data accumulated in `method-tracker` during Phase 3.
-
-A high weight means the paper should be processed earlier within the same priority tier. It may also be promoted to a higher priority tier (e.g. a Priority 3 paper may be promoted to Priority 2 if its weight is +3).
-
-- **+3**: proposes a method used as a baseline by 5 or more other papers
-- **+2**: paper has 3 or more derived variants
-- **+2**: consistent high performance reported across 3 or more independent papers
-- **+1**: achieves strong performance with a simple structure (number of components ≤ 3, number of hyperparameters ≤ 2)
-- **-1**: complex structure (number of components ≥ 6 or number of hyperparameters ≥ 5) and described by other papers as difficult to reproduce
-
-This weight is applied dynamically during Phase 3 through `method-tracker` updates. Whenever the queue is reordered, reflect these weights in the updated ordering.
-
----
+7. **Must Include / Project Context consistency check (mandatory):** Procedure in `kb/context/literature-survey/literature-survey-conventions.md` § Phase 1 Must Include / Project Context Consistency Check. Only proceed to Phase 2 after the user has confirmed or revised the Must Include list following this check.
 
 ## Phase 2: Collect Seed Papers
 
 Do **not** list all 200 papers at once. First collect 15–25 seed papers, then gradually expand the list in Phase 3 by following related works from each paper.
 
-### Step 0 (Always First): Pull and Scan the Local Awesome Recsys Repo
+For Step 0 (Awesome repo scan) and Step 1 (web search query patterns + engineering blog list): see `kb/context/literature-survey/literature-survey-discovery.md`.
 
-Before doing any web search, pull the latest snapshot of the local curated paper collection and scan it for relevant papers.
-
-1. Pull the latest master branch:
-   ```
-   git -C [awesome-repo-path] pull origin master
-   ```
-   Look up `[awesome-repo-path]` from `/path/to/works/for/you/knowledge_base/context/repos.md` ("Awesome Deep Learning Papers" entry).
-
-2. List all PDF files across all category folders.
-
-3. For each PDF whose filename matches the survey topic keywords:
-   - Parse the filename: `YYYY (Company) (Venue) [MethodName] Paper Title.pdf`
-   - Extract: year, venue, method name, title, company affiliation
-   - Papers prefixed with `**` → assign Priority 1 candidate
-   - Papers prefixed with `*` → assign Priority 2 candidate
-   - Papers with no prefix → assign Priority 3 candidate
-   - Adjust priority further using the topic relevance rules (Core/Related/Peripheral)
-
-4. Add matched papers to the seed list. Record source as `"local-awesome-repo: [folder]/[filename]"`. Since PDFs are already downloaded locally, note the local PDF path.
-
-5. If 15+ relevant papers are found in the local repo, you may proceed to Phase 2 Step 2 (NLM Discovery) with those as seeds without web search. If fewer than 15, continue to Step 1 to supplement.
-
-### Step 1: Web Search for Additional Seeds
-
-Collect remaining seed papers via web search. Use the WebSearch and WebFetch tools actively. Combine multiple search engines and academic databases to discover as many papers as possible.
-
-**Search query patterns:**
-
-- `site:arxiv.org [keyword]`
-- `site:proceedings.mlr.press [keyword]`
-- `site:proceedings.neurips.cc [keyword]`
-- `site:openreview.net [keyword]`
-- `[keyword] site:dl.acm.org`
-- `[keyword] NeurIPS OR ICML OR ICLR 2020 2021 2022 2023 2024`
-
-**Semantic Scholar API** (optimal for paper metadata + citation count collection):
-- `https://api.semanticscholar.org/graph/v1/paper/search?query=[keyword]&fields=title,year,venue,citationCount,externalIds,authors`
-
-**Papers With Code** (useful for tracking the latest SOTA):
-- `https://paperswithcode.com/search?q_meta=&q_type=&q=[keyword]`
-
-**Engineering blog search** (select those most relevant to the topic):
-
-Big Tech research blogs:
-- `site:research.google [keyword]`
-- `site:ai.googleblog.com [keyword]`
-- `site:deepmind.google [keyword]`
-- `site:research.facebook.com [keyword]`
-- `site:microsoft.com/en-us/research [keyword]`
-- `site:apple.com/research [keyword]`
-- `site:machinelearning.apple.com [keyword]`
-- `site:amazon.science [keyword]`
-- `site:openai.com/research [keyword]`
-- `site:anthropic.com/research [keyword]`
-
-Big Tech engineering blogs:
-- `site:engineering.fb.com [keyword]`
-- `site:netflixtechblog.com [keyword]`
-- `site:eng.uber.com [keyword]`
-- `site:engineering.linkedin.com [keyword]`
-- `site:eng.snap.com [keyword]`
-- `site:research.bytedance.com [keyword]`
-- `site:engineering.atspotify.com [keyword]`
-- `site:doordash.engineering [keyword]`
-- `site:eng.lyft.com [keyword]`
-- `site:medium.com/airbnb-engineering [keyword]`
-- `site:medium.com/pinterest-engineering [keyword]`
-- `site:medium.com/twitter-engineering [keyword]`
-- `site:shopify.engineering [keyword]`
-- `site:stripe.com/blog/engineering [keyword]`
-
-Asian Big Tech:
-- `site:d2.naver.com [keyword]`
-- `site:tech.kakao.com [keyword]`
-- `site:engineering.linecorp.com [keyword]`
-- `site:medium.com/coupang-engineering [keyword]`
-
-ML/AI-specialized:
-- `site:huggingface.co/blog [keyword]`
-- `site:wandb.ai/fully-connected [keyword]`
-
-### Step 2 (NEW): NLM Research Discovery
+### Step 2 (NLM-specific): NLM Research Discovery
 
 1. Create the topic notebook: `notebook_create(title="[topic-slug]")` → save the returned `notebook_id` to `notebooklm-state.md`.
 2. Call `research_start(notebook_id=<id>, query="<topic keywords>", source="web", mode="deep")` → record the returned `task_id`.
@@ -414,34 +141,17 @@ ML/AI-specialized:
 
 ### Step 3: Deduplicate and Build queue.md
 
-Union all sources from Steps 0, 1, and 2. Deduplicate by title. Apply all priority and relevance rules from Phase 1 verbatim.
+Union all sources from Steps 0, 1, and 2. Deduplicate by title. Apply all priority and relevance rules from `kb/context/literature-survey/literature-survey-priorities.md` verbatim.
 
-**`queue.md` format** — extends the standard format with an `nlm` column:
-
-```markdown
-# [Topic] Paper Queue
-
-## To Process
-- [Title or URL] | [Source] | [Relevance: Core/Related/Peripheral] | [Priority 1/2/3/4] | nlm:pending
-- [Title or URL] | [Source] | [Relevance] | [Priority] | nlm:<source_id>   ← already in NLM
-- [Title or URL] | [Source] | [Relevance] | [Priority] | nlm:failed:<reason>
-
-## Done
-- [filename.md] | [Title] | [processing date] | nlm:<source_id>
-
-## Skipped
-- [Title] | [reason]
-```
+`queue.md` format (extends the standard format with an `nlm:` column): see `kb/context/literature-survey/literature-survey-conventions.md` § queue.md Format.
 
 After seed collection, assess whether the target number of papers (200) is appropriate for the topic. If 200 seems excessive, stop at Phase 2 and confirm the target paper count with the user. Proceed with later phases using the approved target count.
 
-Also create an empty `method-tracker.md` (see the template in the original `literature-survey` skill at `~/.claude/skills/literature-survey/SKILL.md`).
-
----
+Also create an empty `method-tracker.md` (template in `kb/context/literature-survey/literature-survey-templates.md`).
 
 ## Phase 3: Per-Paper Analysis via NLM
 
-This is the token-saving core. Instead of reading PDFs into Claude's context, Claude fires 2 structured queries per paper to NotebookLM.
+This is the token-saving core. Instead of reading PDFs into Claude's context, Claude fires structured queries per paper to NotebookLM.
 
 **Delegation model:** Process papers in batches of 3–5. Each batch is delegated to a fresh general-purpose subagent via the Agent tool to prevent context bloat. The brief to each subagent must include: `notebook_id`, the batch paper list with source IDs and URLs, and the output folder path. After the subagent writes the batch outputs to disk, a new subagent is spawned for the next batch.
 
@@ -452,11 +162,7 @@ For each paper in the batch:
 Before ingesting, normalize the URL:
 
 - **arXiv abstract URL** (`arxiv.org/abs/<ID>` or `arxiv.org/abs/<ID>v<N>`): convert to PDF URL → `https://arxiv.org/pdf/<ID>.pdf`
-- **Paywalled publisher URL** (IEEE Xplore `ieeexplore.ieee.org`, ACM DL `dl.acm.org`, Springer `link.springer.com`, Elsevier `sciencedirect.com`): do **not** skip immediately. First search for a free version in this order:
-  1. `site:arxiv.org [title]`
-  2. `site:ssrn.com [title]`
-  3. Semantic Scholar — check for "Open Access PDF" button
-  4. Author homepage: search `[first author name] [title] pdf`
+- **Paywalled publisher URL** (IEEE Xplore `ieeexplore.ieee.org`, ACM DL `dl.acm.org`, Springer `link.springer.com`, Elsevier `sciencedirect.com`): do **not** skip immediately. First search for a free version using the four-step search order in `kb/context/literature-survey/literature-survey-priorities.md` § Accessibility Principle.
 
   If a free URL is found, replace the URL with the free version and continue ingestion normally.
   Only if all four checks return nothing: mark as `nlm:failed:paywall` in queue.md, log the search attempts in the Skipped section as `"paywall — checked arxiv, SSRN, Semantic Scholar, author homepage; no free version found"`, and skip.
@@ -500,9 +206,9 @@ This query runs for **all** papers unconditionally. If the answer indicates the 
 
 Assemble the three Q&A responses into the standard `read-papers/` markdown file.
 
-Follow the **filename rules** and **report template** from `/path/to/works/for/you/.claude/skills/paper-reader/SKILL.md` exactly. Do not copy the template into this skill — read it at runtime and apply it.
+Follow the **filename rules** and **report template** from `~/.claude/skills/paper-reader/SKILL.md` exactly. Do not copy the template into this skill — read it at runtime and apply it.
 
-When in `read-papers/` mode (as opposed to standalone paper-reader use), leave the Reverse Citation Map section blank — it is filled in during Phase 3.7.
+When in `read-papers/` mode (as opposed to standalone paper-reader use), leave the Reverse Citation Map section blank — it is filled in during Phase 3.7. The Project Relevance and Reverse Citation Map section formats are in `kb/context/literature-survey/literature-survey-templates.md` § Per-Paper Markdown Additions.
 
 After the standard template sections, add a **Project Relevance** section containing the structured Query 3 answer:
 
@@ -524,86 +230,22 @@ If the Query 3 answer indicates the paper does not meaningfully address the proj
   [Batch complete] Processed: X | Skipped: Y | Remaining: Z | NLM sources in notebook: N
   ```
 
-**Note on cross-paper baseline question:** The "is this paper's method used as a baseline by others?" question cannot be answered per-paper because it requires seeing the full notebook. This is addressed in Phase 4-B (Query 5).
+**Note on cross-paper baseline question:** The "is this paper's method used as a baseline by others?" question cannot be answered per-paper because it requires seeing the full notebook. This is addressed in Phase 4-A (Query 5).
 
 ### Queue Depletion Strategy
 
-If the queue risks running out before reaching the target paper count, expand it in the following order. Always start from Step 0.
-
-**Step 0 (Highest Priority): Harvest Citations from Already Written Markdowns**
-
-Before expanding into adjacent fields, inspect all markdown files in `read-papers/` and harvest new candidate papers.
-
-1. Get the full list of `.md` files in `read-papers/`.
-2. Read the Related Works and Introduction sections of each file.
-3. Extract all cited paper titles from those sections.
-4. Exclude papers already present in the queue (`To Process`, `Done`, or `Skipped`) or already in `read-papers/`.
-5. For remaining candidates, check citation count and venue on Semantic Scholar and assign priorities.
-6. Re-read the survey scope in `requirements.md` and prioritize papers matching "Must include" criteria; skip papers falling under "Exclude."
-7. Add new candidates to `To Process`. Mark source as `"Related Work harvest: [source filename]"`.
-8. Reorder the queue by priority + method-tracker weights + requirements fit.
-
-If this yields enough papers (`To Process` > 50), do not continue to adjacent-field expansion.
-
-**Step 1 and Beyond: Expand into Adjacent Fields**
-
-If still insufficient after Step 0:
-1. Explore subtopics or specific methodologies within the current topic
-2. Explore papers that address the same problem in different domains/modalities
-3. Baseline/foundation methodology papers related to the topic
-4. Papers that apply or critique the topic
-
-Record expansion details in the "Survey Scope and Constraints" section of `requirements.md`. Mark source as `"Adjacent-field expansion: [reason]"`.
-
-**Queue health rule:** If `To Process` drops below 50, immediately start expansion again from Step 0. Do not wait.
-
----
+If the queue risks running out before reaching the target paper count, expand it following the Queue Depletion Strategy in `kb/context/literature-survey/literature-survey-discovery.md`. The harvest source for the NLM variant is the markdowns in `read-papers/` (Related Works and Introduction sections), not PDFs.
 
 ## Phase 3.5: Finalize Method Tracker
 
-After Phase 3 ends, finalize `method-tracker.md`:
-
-- Sort the table by descending "baseline mention count"
-- Compute simplicity score and performance consistency score, and add a "fundamentality composite score" column
-- For the top 10 methods, add a one-line explanation of "why this method is fundamental"
-
-This data is used in the "Most Fundamental Methods" section of the Phase 5 executive summary.
-
----
+See `kb/context/literature-survey/literature-survey-conventions.md` § Phase 3.5.
 
 ## Phase 3.7: Cross-Reference Mapping
 
 After Phase 3.5 is complete, you **must** run this step. Do **not** start Phase 4 until this step is complete.
+Full procedure and gating rule: see `kb/context/literature-survey/literature-survey-conventions.md` § Phase 3.7.
 
-**Purpose:** Record how papers in `read-papers/` mention and evaluate each other inside the individual markdown files. This allows each paper's markdown file to contain both "how I view other papers" and "how other papers view me."
-
-**Procedure:**
-
-1. Get the list of all `.md` files in the `read-papers/` folder (exclude PDF files).
-2. For each paper A's markdown file, read the Introduction and Related Works sections and extract all sentences that mention other papers. Extraction criteria:
-   - Sentences that directly mention another paper's title or author name
-   - Evaluative mentions such as: `"[X] proposed Y"`, `"Unlike [X], we ..."`, `"Extending the method of [X] ..."`
-   - Sentences identifying specific papers as examples of "limitations of prior work"
-3. Check whether the mentioned paper exists as a markdown file in `read-papers/`. If yes, add or update the following section in that paper B's markdown file:
-
-```markdown
-## Papers That Mention This Paper (Reverse Citation Map)
-
-| Mentioning Paper | Mention Context | Summary of Original Wording |
-|------------|----------|----------|
-| [Paper A filename.md](./paperAfilename.md) | [which section mentioned it: Related Work / Introduction / Experiments] | [one-line summary of how it was evaluated: "used as a baseline", "pointed out limitations", "starting point of our method", "reported lower performance", etc.] |
-| ... | ... | ... |
-```
-
-4. Complete this for all markdown files in `read-papers/`. If parallelization is possible, split into 20-paper groups and delegate to subagents via the Agent tool.
-5. After completion, output a one-line summary. Example:
-   ```text
-   [Phase 3.7 complete] Reverse citation map created: X total papers, Y reverse-citation relations recorded
-   ```
-
-Only after this step is fully complete may you proceed to Phase 4. Additionally, before starting Phase 4, verify that the "Done" section of `queue.md` contains ≥ 50% of the target paper count recorded in `requirements.md` (and at least 30 papers). If this threshold is not met, return to Phase 3 and continue processing papers until it is. To skip this gate, the user must explicitly approve early synthesis.
-
----
+**Execution: dispatch to Gemini CLI** (via `cli-review` skill) with all files in `read-papers/` as the file list. Gemini reads the full corpus in one shot and returns the citation map. Do not delegate to a Claude subagent — at 200 papers, the corpus exceeds Claude's practical context for this step.
 
 ## Phase 4: Literature Review (NLM-First Hybrid Synthesis)
 
@@ -619,21 +261,19 @@ Query the full notebook with no `source_ids` filter (all papers). Use these 5 qu
 
 **Queries 6–7 (project-specific synthesis)** — dynamically formulated by the Phase 4 subagent from the `## Project Context` section in `README.md`. The subagent reads the Project Context and writes 1–2 cross-paper queries (no `source_ids` filter) that synthesize the notebook's papers through the lens of the project's specific needs. Examples: "Which methods in this notebook are applicable when labels are [project-specific label type]?" or "What does the collective evidence say about [project-specific concern]?" These become additional building blocks for `literature-review.md`.
 
-### 4-B: Claude Structures into literature-review.md
+### 4-B: Gemini Structures into literature-review.md
 
-Claude takes NLM's 5–7 responses and structures them into `literature-review.md` following the original skill's format (see `~/.claude/skills/literature-survey/SKILL.md` — "Main Review File Template"). The project-specific synthesis (Queries 6–7) feeds into a dedicated section of the review. Claude does **not** re-read all individual per-paper markdowns at this step.
+**Execution: dispatch to Gemini CLI** (via `cli-review` skill). Pass the 5–7 NLM query responses from Phase 4-A, the Main Review File Template from `kb/context/literature-survey/literature-survey-templates.md`, and the `## Project Context` from `README.md`. Gemini consolidates the NLM responses into a `literature-review.md` draft. Claude Lead reviews the draft, runs the conflict check (Phase 4-C), and finalizes. Claude does **not** re-read all individual per-paper markdowns at this step.
 
 ### 4-C: Conflict Check
 
 Claude spot-checks NLM's cross-paper claims against the per-paper markdowns already written (read only the specific ones relevant to a claimed conflict). If a conflict is found: flag it, re-query NLM with a follow-up question, and resolve before finalizing.
 
----
-
 ## Phase 5: Write Outputs and Evaluate Coverage
 
 Note: Start this phase only after Phase 3.7 is fully complete.
 
-Complete the following files:
+Complete the four files using the templates in `kb/context/literature-survey/literature-survey-templates.md`:
 
 #### File 1: `requirements.md`
 
@@ -643,11 +283,13 @@ Complete the following files:
 
 #### File 2: `literature-review.md`
 
-Full paper list and category-wise summary. Each paper entry should include a link to the individual file in `read-papers/`. See the "Main Review File Template" in `~/.claude/skills/literature-survey/SKILL.md`.
+Full paper list and category-wise summary. Each paper entry should include a link to the individual file in `read-papers/`.
 
 #### File 3: `executive-summary.md`
 
-A 2–3 page summary for decision-makers. See the "Executive Summary File Template" in `~/.claude/skills/literature-survey/SKILL.md`.
+**Execution: dispatch to Gemini CLI** (via `cli-review` skill). Pass `literature-review.md`, `method-tracker.md`, `README.md` (for Project Context), and all files in `read-papers/`. Gemini drafts the executive summary. Claude Lead reviews the draft, runs the optional NLM sanity check query, and finalizes.
+
+A 2–3 page summary for decision-makers.
 
 Every claim and recommendation must explicitly cite sources using the paper's full name. Do not use abbreviations like "the PoLL paper". Use the format: `"Author et al., full paper title, conference year"`.
 
@@ -659,82 +301,14 @@ The executive summary must include an **"Implications for [Use Case]"** section 
 
 #### File 4: `method-tracker.md`
 
-Gradually filled during Phase 3, finalized in Phase 3.5. See the "Method Tracker File Template" in `~/.claude/skills/literature-survey/SKILL.md`.
+Gradually filled during Phase 3, finalized in Phase 3.5.
 
 #### Phase 5 Exit Condition: Coverage Evaluation
 
-After drafting File 2 and File 3, before stopping, evaluate coverage:
-
-1. List all items specified in `requirements.md` under "Request", "Must Include", and "Core Keywords".
-2. Evaluate how well `literature-review.md` and `executive-summary.md` cover each item. The criterion for "covered" is whether enough evidence exists for decision-making.
-3. Compute overall coverage as a percentage. Example: `"18 covered out of 20 requirement items = 90%"`
-4. **Project Context fitness check:** Re-read the `## Project Context` section in `README.md`. For each key statement in the Project Context (required output type, domain constraint, target variable type, use-case description), verify that at least one paper cluster in `literature-review.md` directly addresses it. A cluster "directly addresses" a statement if its papers produce the output type or solve the problem the statement describes. An unaddressed Project Context statement counts as a coverage gap regardless of keyword coverage percentage. List any unaddressed statements explicitly.
-
-**Actions based on coverage:**
-
-- If coverage ≥ 95% AND all Project Context statements are addressed by at least one paper cluster: final completion. Report to user.
-- If coverage < 95% or some items are too thinly covered:
-  1. Specify which requirement items are lacking
-  2. Collect an additional 100 papers to fill those gaps
-  3. Add them to the queue and repeat from Phase 3
-  4. After processing the additional 100 papers, rerun Phases 3.5 → 3.7 → 4 → 5
-  5. Reevaluate coverage and stop only once coverage reaches ≥ 95%
-- Continue this loop until coverage ≥ 95%.
-- However, if the total cumulative number of papers exceeds 500, report the status to the user and confirm whether to continue.
-
----
+Full coverage-evaluation procedure (keyword coverage % + Project Context fitness check + actions when below 95%): see `kb/context/literature-survey/literature-survey-conventions.md` § Phase 5 Exit Condition.
 
 ## Final: Append to log.md
 
-After Phase 5 completes (whether final completion or paused for user input), prepend a dated entry (newest on top) to `[topic-slug]/log.md`. Create the file with header `# Log — <Topic>\n` if it doesn't exist.
-
-Entry format:
-
-```markdown
-## YYYY-MM-DD — literature-survey-nlm run (<initial | resume | rerun>)
-- Phase reached: <e.g. Phase 5 complete | Phase 3 paused at 80/200 papers>
-- Papers in queue: Done(N) / To Process(N) / Skipped(N)
-- Coverage: <X%> covered (project context fitness: <pass | gap on N statements>)
-- Outputs touched: literature-review.md, executive-summary.md, method-tracker.md
-- NLM notebook source count: <N> (added <delta> this run)
-- Notable: <one-line headline of the most significant finding or status>
-```
+After Phase 5 completes (whether final completion or paused for user input), prepend a dated entry (newest on top) to `[topic-slug]/log.md`. Entry format and rules: see `kb/context/literature-survey/literature-survey-conventions.md` § Final Append to log.md. Use `<skill-name>` = `literature-survey-nlm` for the run header. The log entry should also include `NLM notebook source count: <N> (added <delta> this run)`.
 
 This section runs unconditionally at the end of every invocation, including resumes and reruns — it's the audit trail.
-
----
-
-## Writing Principles
-
-Follow the "Writing Notes and Cautions" section from `~/.claude/skills/paper-reader/SKILL.md` as the default principles.
-
-Additional principles for this skill:
-
-- Target paper count is 100–300 (default 200). If insufficient, run the adjacent-field expansion strategy. If excessive, eliminate lower-priority papers according to the priority criteria.
-- Analyze Priority 1–2 papers deeply; handle Priority 3–4 papers with brief summaries.
-- Every claim and recommendation in `executive-summary.md` must cite the paper's full name. No abbreviations. Format: `"author et al., full paper title, conference/journal year"`.
-- Before starting the survey, read the current project's `CLAUDE.md` and the upper folder's `CLAUDE.md` to understand the user context.
-
-## Accessibility Principle
-
-Inclusion rule for papers — only include papers whose full text is freely accessible.
-
-Accepted free-access sources:
-- `arxiv.org` (preprint or conference version)
-- `openreview.net` (ICLR, NeurIPS, and other OpenReview-based conferences)
-- Publicly available PDFs on official conference sites (`proceedings.mlr.press`, `proceedings.neurips.cc`, `aaai.org`, `aclanthology.org`, etc.)
-- "Open Access PDF" link available on Semantic Scholar / Papers With Code
-- PDF publicly available on the author's homepage or institution page
-
-Exclude papers whose full text is inaccessible without payment on ACM DL, IEEE Xplore, Springer, Elsevier, etc. In the queue's `Skipped` section, record the reason as: `paid access only - no free version available`.
-
-How to check: search the paper on Semantic Scholar and check whether an "Open Access PDF" button exists; if not, search `site:arxiv.org [title]` or `site:openreview.net [title]`.
-
----
-
-## References Used During Execution
-
-- **NotebookLM tools and usage patterns:** `~/.claude/skills/notebooklm/SKILL.md`
-- **Filename rules + report template:** `~/.claude/skills/paper-reader/SKILL.md`
-- **Repo path lookup:** `~/.claude/skills/fetch-repo-path/SKILL.md` (or directly: `/path/to/works/for/you/knowledge_base/context/repos.md`)
-- **Resume logic, Phase 3.5/3.7, priority rules, venue lists, output file templates:** `~/.claude/skills/literature-survey/SKILL.md`

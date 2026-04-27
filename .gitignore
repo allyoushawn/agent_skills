@@ -4,3 +4,4 @@ run-openai-chat-mcp.sh
 .claude/skills/llm-consultants.md
 .DS_Store
 .claude/skills/publish-skills/
+.claude/agents/experiment-runtime.md

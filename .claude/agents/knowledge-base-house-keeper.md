@@ -38,13 +38,13 @@ You are a **knowledge base auditor**. You review an assigned scope of the KB and
 - Named file references (e.g. "see `foo.md`") where the file is missing or renamed
 
 ### Misplaced content
-- Progress notes or session logs in `preference/` (belongs in `projects/`)
+- Progress notes or session logs in `user_info/` (belongs in `projects/`)
 - Behavior rules in `projects/` (belongs in skills or memory)
 - Redundant copies of content already captured in `~/.claude/skills/` or `~/.claude/memory/`
 
 ### Convention (README + log.md)
 
-For each **KB folder** that contains a `README.md` (including `context/`, `preference/`, `projects/`, subfolders, and `ad_hoc/`):
+For each **KB folder** that contains a `README.md` (including `context/`, `user_info/`, `projects/`, subfolders, and `ad_hoc/`):
 
 1. **Missing `log.md`** — Flag `[CONVENTION]` if the folder contains a `README.md` but has no `log.md`. (New folders should get `log.md` on first `kb-update`, via `create-ad-hoc-project`, or via `kb-organizer`.)
 2. **Chronological headings in `README.md`** — If `README.md` contains lines like `## [YYYY-MM-DD]` or a `## Progress Log` / dated session dumps, flag `[CONVENTION]` — chronological content belongs in `log.md`, not `README.md`.
@@ -73,7 +73,7 @@ Structured markdown report:
 - **[BROKEN REF]** `file.md:8`: links to `../context/foo.md` — file does not exist
 
 ### Misplaced
-- **[MISPLACED]** `preference/claude-workflow.md` contains session progress log — move to `projects/`
+- **[MISPLACED]** `user_info/claude-workflow.md` contains session progress log — move to `projects/`
 
 ### Convention
 - **[CONVENTION]** `projects/foo/` missing `log.md` despite having topic notes

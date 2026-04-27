@@ -7,15 +7,7 @@ description: Use this skill when deciding whether and how to update the knowledg
 
 ## When to update
 
-Update the KB after **non-trivial** tasks:
-- New agent, skill, or rule created or promoted
-- Design decision or architectural choice made
-- New workflow pattern established
-- Something learned that would change future behavior
-
-**Do not** update after trivial tasks (lookups, one-liners, repeating a documented workflow).
-
-When genuinely unsure, ask: "Should I update the knowledge base with anything from this session?"
+When this skill should fire is governed by CLAUDE.md § "Proactive KB update" (non-trivial tasks: new skill/agent/rule, design decision, new workflow pattern, or learning that changes future behavior). This skill defines **how** to route and write the update once it has been triggered.
 
 ## Where to put what
 
@@ -27,7 +19,7 @@ Use for:
 
 Each project gets its own folder. Add or append a note file per topic or session as needed.
 
-### `preference/claude-workflow.md` — session-critical defaults only
+### `user_info/claude-workflow.md` — session-critical defaults only
 This file is **loaded every session** — keep it lean.
 
 Only update it when:
@@ -59,15 +51,12 @@ Scan the existing files in the project folder before writing to pick the right t
 
 ## Trigger points
 
-The kb-update process should fire automatically at these moments — do not wait for the user to ask:
+Auto-firing triggers are listed in CLAUDE.md § "Proactive KB update". Skill-specific addenda:
 
-1. **After creating or modifying a skill, agent, or rule** — capture the design rationale in the relevant projects/ note
-2. **After a design decision or architectural choice** — even if the decision is encoded in a skill, the *why* behind it belongs in projects/
-3. **Before save-to-github** — if the user says "save state", run kb-update first. The save skill should checkpoint what was learned, not just what was coded
-4. **After a multi-step debugging or investigation session** — if the root cause or fix was non-obvious, it's worth capturing
-5. **When the user provides feedback that changes a workflow pattern** — the feedback itself goes to memory, but the broader context (what changed and why) goes to projects/
+- After a multi-step debugging or investigation session, if the root cause or fix was non-obvious, capture it.
+- When user feedback changes a workflow pattern, the feedback itself goes to memory; the broader *why* goes to `projects/`.
 
-If none of these triggers apply, skip silently — don't ask.
+If none apply, skip silently — don't ask.
 
 ## Process
 
@@ -77,7 +66,7 @@ If none of these triggers apply, skip silently — don't ask.
 4. **Write and log** (for each approved write into any KB folder):
    1. Write the topic note to the approved file — include the *why* (design context), not just the *what*.
    2. **Ensure `log.md` exists** in that KB folder. If missing, create it with a single seed line: `## [YYYY-MM-DD] init | <short label from the folder name or README title>`. A missing `log.md` means the folder has not yet been migrated to this convention — create it before appending.
-   3. **Append** one line to `log.md`: `## [YYYY-MM-DD] <type> | <one-liner>` where `<type>` is one of `add`, `update`, `remove`, `ingest`, `decision`, `refactor`, `experiment`, `feedback`, `lint` (use the best fit for this session). Use `add`/`update`/`remove` for `context/` and `preference/` folder changes (file added, significantly revised, or deleted); use the richer project types for `projects/` work. **Never edit or remove prior lines** in `log.md`.
+   3. **Append** one line to `log.md`: `## [YYYY-MM-DD] <type> | <one-liner>` where `<type>` is one of `add`, `update`, `remove`, `ingest`, `decision`, `refactor`, `experiment`, `feedback`, `lint` (use the best fit for this session). Use `add`/`update`/`remove` for `context/` and `user_info/` folder changes (file added, significantly revised, or deleted); use the richer project types for `projects/` work. **Never edit or remove prior lines** in `log.md`.
    4. If a past `log.md` entry must be corrected, append a **new** line with type `feedback` — do not rewrite history.
 
 5. After writing, invoke the **kb-organizer** agent (via Agent tool) with `scope = <the folder you just wrote to>`. Wait for its change report. This refreshes the folder's KB_INDEX and propagates topic changes to ancestor READMEs. If kb-organizer reports a "Suggested Reorganization", include it in your summary to the user but do not act on it without explicit instruction.

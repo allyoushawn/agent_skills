@@ -23,7 +23,7 @@ Classify the query:
 - **Topical / keyword** — default path: Steps 1–4 below.
 
 ### Step 1 — Read root index
-Read `/path/to/works/for/you/knowledge_base/README.md`. If it doesn't exist, read the top-level directory listing instead. From the KB_INDEX block, identify which top-level folders (context/, preference/, projects/) are most relevant to the query based on their descriptions and Key Topics.
+Read `/path/to/works/for/you/knowledge_base/README.md`. If it doesn't exist, read the top-level directory listing instead. From the KB_INDEX block, identify which top-level folders (context/, user_info/, projects/) are most relevant to the query based on their descriptions and Key Topics.
 
 Select the top 2–3 candidate folders. If the query is broad, include all.
 
@@ -65,7 +65,7 @@ Folders searched: [folder1, folder2]
 Last updated: YYYY-MM-DD | Status: active
 > <1–3 quoted paragraphs or sections most relevant to the query>
 
-[File: context/user-profile.md] (matched via: topics)
+[File: user_info/user-profile.md] (matched via: topics)
 Last updated: YYYY-MM-DD | Status: active
 > <relevant excerpt>
 

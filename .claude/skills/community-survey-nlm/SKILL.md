@@ -24,7 +24,7 @@ The value of this skill is **persistent topic memory**, not single-run token eff
 
 ## Output location
 
-Resolve the paper reading repo path via the `fetch-repo-path` skill (reads `/path/to/works/for/you/knowledge_base/context/repos.md` → "Paper Reading Repo" entry). Do not hardcode the path. Then write under:
+Resolve the paper reading repo path via the `fetch-repo-path` skill (reads `/path/to/works/for/you/knowledge_base/context/registry/repos.md` → "Paper Reading Repo" entry). Do not hardcode the path. Then write under:
 
 ```
 <paper-reading-repo>/community-survey/<topic_slug>/

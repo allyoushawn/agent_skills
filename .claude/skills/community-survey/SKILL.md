@@ -17,7 +17,7 @@ Surveys informal and industry sources for a given topic — covering Hacker News
 
 ## Output location
 
-Resolve the paper reading repo path via the `fetch-repo-path` skill (reads `/path/to/works/for/you/knowledge_base/context/repos.md` → "Paper Reading Repo" entry). Do not hardcode the path. Then write to:
+Resolve the paper reading repo path via the `fetch-repo-path` skill (reads `/path/to/works/for/you/knowledge_base/context/registry/repos.md` → "Paper Reading Repo" entry). Do not hardcode the path. Then write to:
 
 ```
 <paper-reading-repo>/community-survey/<topic_slug>/community_survey_YYYYMMDD.md

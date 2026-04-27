@@ -94,4 +94,4 @@ If the user says "fix it", apply unambiguous fixes directly. For merges or delet
 
 ## Phase 6 — Record completion (cadence marker)
 
-After the sweep finishes (reports consolidated, user acknowledged or session ends), **write** `/path/to/works/for/you/knowledge_base/.last_sweep` with a single line: ISO-8601 UTC timestamp of completion (e.g. `2026-04-18T12:00:00Z`). If the file exists, overwrite it. This file is used by the session startup checklist in `preference/claude-workflow.md` to prompt a new sweep if older than 7 days.
+After the sweep finishes (reports consolidated, user acknowledged or session ends), **write** `/path/to/works/for/you/knowledge_base/.last_sweep` with a single line: ISO-8601 UTC timestamp of completion (e.g. `2026-04-18T12:00:00Z`). If the file exists, overwrite it. This file is used by the session startup checklist in `user_info/claude-workflow.md` to prompt a new sweep if older than 7 days.

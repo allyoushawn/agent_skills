@@ -130,7 +130,7 @@ The scanner honors `.secret-scan-allowlist` (per-repo, paths to skip) and inline
 
 ## Repo Path References — Single Source of Truth
 
-The canonical registry of local repository paths is `/path/to/works/for/you/knowledge_base/context/repos.md`. Resolve paths via the `fetch-repo-path` skill at runtime.
+The canonical registry of local repository paths is `/path/to/works/for/you/knowledge_base/context/registry/repos.md`. Resolve paths via the `fetch-repo-path` skill at runtime.
 
 **Never hardcode absolute paths to registered repos** in skills, agents, memory files, or KB notes. Drift across multiple hardcoded copies is the failure mode this rule prevents.
 
@@ -165,12 +165,7 @@ Note: Haiku agents (reading-agent, experiment-analyzer, experiment-scribe, exper
 
 ## LLM Consultants (Gemini / OpenAI second opinions)
 
-When the user asks for a **second opinion**, wants to consult **Gemini**, **ChatGPT/OpenAI**, or requests an **external review** or **model comparison**, follow the skill at `~/.claude/skills/consult-llm/SKILL.md`.
-
-Key points:
-- Use `mcp__chat-gemini__chat-with-gemini` for Gemini, `mcp__chat-openai__chat-with-openai` for OpenAI/GPT.
-- When consulting both, send the **same** prompt to each in parallel, then summarize agreements, disagreements, and a recommendation — attributed per model.
-- If an MCP call fails (auth, quota, model error), report the error and suggest checking `~/.claude/run-gemini-chat-mcp.sh` or `~/.claude/run-openai-chat-mcp.sh`.
+When the user asks for a **second opinion**, wants to consult **Gemini**, **ChatGPT/OpenAI**, or requests an **external review** or **model comparison**, invoke the `consult-llm` skill — it documents the MCP tool names, parallel-consultation pattern, and failure fallbacks.
 
 ## KB Retrieval Before External Research
 

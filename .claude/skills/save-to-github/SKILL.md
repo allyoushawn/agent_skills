@@ -1,14 +1,15 @@
 ---
 name: save-to-github
-description: Use this skill when the user says "save the state to github", "save state", "push state to github", or "checkpoint to github". Performs a security risk scan, ignores risky files, stages safe ones, commits, and offers to push. Operates on three repos in every run: the knowledge base repo at /path/to/works/for/you/knowledge_base/, the Claude config repo at ~/.claude/, and the paper reading repo at /path/to/works/for/you/Projects/paper_reading_repo/.
+description: Use this skill when the user says "save the state to github", "save state", "push state to github", or "checkpoint to github". Performs a security risk scan, ignores risky files, stages safe ones, commits, and offers to push. Operates on four repos in every run: the knowledge base repo at /path/to/works/for/you/knowledge_base/, the Claude config repo at ~/.claude/, the paper reading repo at /path/to/works/for/you/Projects/paper_reading_repo/, and the public agent skills repo at ~/agent_skills/.
 ---
 
 # Save State to GitHub
 
-This skill saves state for **three repos** in every run:
-1. **Knowledge base repo** — always `/path/to/works/for/you/knowledge_base/` (registered in `knowledge_base/context/repos.md`)
+This skill saves state for **four repos** in every run:
+1. **Knowledge base repo** — always `/path/to/works/for/you/knowledge_base/` (registered in `knowledge_base/context/registry/repos.md`)
 2. **Claude config repo** — always `~/.claude/` (not in the repo registry; it's the AI config itself)
-3. **Paper reading repo** — always `/path/to/works/for/you/Projects/paper_reading_repo/` (registered in `knowledge_base/context/repos.md` as `paper_reading_repo`)
+3. **Paper reading repo** — always `/path/to/works/for/you/Projects/paper_reading_repo/` (registered in `knowledge_base/context/registry/repos.md` as `paper_reading_repo`)
+4. **Agent skills repo** — always `~/agent_skills/` (**public** repo; content is pre-sanitized by `publish-skills` before landing here)
 
 Run the full pipeline below for each repo. If a repo has no changes, note it as clean and move on.
 
@@ -23,6 +24,8 @@ Run the full pipeline below for each repo. If a repo has no changes, note it as 
 - Claude config status: !`git -C ~/.claude status --short 2>/dev/null || echo "not initialized"`
 - Paper reading branch: !`git -C /path/to/works/for/you/Projects/paper_reading_repo branch --show-current 2>/dev/null || echo "not initialized"`
 - Paper reading status: !`git -C /path/to/works/for/you/Projects/paper_reading_repo status --short 2>/dev/null || echo "not initialized"`
+- Agent skills branch: !`git -C ~/agent_skills branch --show-current 2>/dev/null || echo "not initialized"`
+- Agent skills status: !`git -C ~/agent_skills status --short 2>/dev/null || echo "not initialized"`
 
 ---
 
@@ -38,31 +41,24 @@ If there are no candidates, note "Nothing new — working tree is clean." and sk
 
 ### Step 3 — Privacy & Secrets Risk Scan (tiered)
 
-The scan tier depends on the repo. The global secrets policy (`~/.claude/CLAUDE.md` § "Secrets Policy — One Sanctioned Home") declares `~/.claude/<service>_api_key` as the **only** sanctioned home for credentials and the other two repos as **key-free zones by design**. Step 3 enforces that policy, not arbitrary content review.
+Step 3 enforces the global secrets policy — see CLAUDE.md § "Secrets Policy — One Sanctioned Home" for the canonical rule (`~/.claude/<service>_api_key` is the only sanctioned home; the other two repos are key-free zones by design). The tiered scan below is the enforcement mechanism.
 
 #### Tier A — `~/.claude/` (deep per-file review)
 
-Read each candidate diff/file and flag it as **RISKY** if it matches any of the patterns below. The changeset here is small, so per-file review is cheap.
-
-| Risk Pattern | Examples (`secret-scan: example`) |
-|---|---|
-| Hardcoded API keys | `sk-...`, `AKIA...`, `ghp_...`, `xox...` |
-| Private key material | `-----BEGIN ... PRIVATE KEY-----`, PEM blocks |
-| Auth tokens / Bearer literals | `Authorization: Bearer <literal>`, `token = "..."` |
-| `.env`-style assignments | `DB_PASSWORD=mypass`, `SECRET=abc123` |
-| Credentials filenames | `credentials.json`, `*.pem`, `id_rsa` |
-| Connection strings with passwords | `postgresql://user:password@...` |
-| PII | SSNs, passport numbers, phone numbers in data files |
+Read each candidate diff/file and flag it as **RISKY** if it matches any of the patterns enumerated by `~/.claude/tools/secret-scan.sh` (single source of truth for patterns) — covers hardcoded API keys, private key material, auth tokens, `.env` assignments, credentials filenames, connection strings with passwords, and PII. The changeset here is small, so per-file review is cheap.
 
 **Filename rule (always RISKY regardless of content):** `gemini_api_key`, `openai_api_key`, `*_api_key`, `*_key`. These are gitignored in `~/.claude/.gitignore`.
 
-#### Tier B — `knowledge_base/` and `paper_reading_repo/` (mechanical scan)
+#### Tier B — `knowledge_base/`, `paper_reading_repo/`, and `agent_skills/` (mechanical scan)
 
 These repos are **declared key-free zones**. Run the canonical scanner — it is the **single source of truth** for patterns. Do not duplicate patterns into prose or per-repo scripts.
+
+`~/agent_skills/` is a **public** repo. Content is pre-sanitized by `publish-skills` before landing here, but the mechanical scan still runs as a safety net — stakes are higher for public repos.
 
 ```bash
 ~/.claude/tools/secret-scan.sh /path/to/works/for/you/knowledge_base
 ~/.claude/tools/secret-scan.sh /path/to/works/for/you/Projects/paper_reading_repo
+~/.claude/tools/secret-scan.sh ~/agent_skills
 ```
 
 The scanner enumerates the union of (modified-vs-HEAD) and (untracked, gitignore-respecting) files, runs one pass per file, honors the per-repo `.secret-scan-allowlist` and inline `secret-scan: example` markers, and exits **0 = clean** / **1 = matches found**.
@@ -77,7 +73,7 @@ The scanner enumerates the union of (modified-vs-HEAD) and (untracked, gitignore
 Use this when the previous checkpoint pre-dates the tiered scan, or when a large drop was committed in a single shot and you want to verify retroactively.
 
 - **Exit 0** → proceed to Step 5 (no per-file content reading required by Claude).
-- **Exit 1** → review each match. For true positives, follow the secret-handling policy in `~/.claude/CLAUDE.md`: stop, never echo the value, prompt the user to relocate to `~/.claude/<service>_api_key`, do **not** stage the file. For false positives in documentation, add `# secret-scan: example` to that line (or add the path to `.secret-scan-allowlist`) and re-run the scanner.
+- **Exit 1** → review each match. For true positives, follow the secret-handling protocol in CLAUDE.md § "Secrets Policy" (do not stage the file). For false positives in documentation, add `# secret-scan: example` to that line (or add the path to `.secret-scan-allowlist`) and re-run the scanner.
 
 **Why tiered:** the deep per-file review on a 5000-file literature-survey drop would cost thousands of tokens for near-zero added safety — those repos already have a "no credentials, ever" invariant. The mechanical scan verifies the invariant held this session at near-zero token cost (only matching lines enter Claude's context).
 
@@ -126,12 +122,13 @@ Skipped (added to .gitignore):
 
 ## Final Prompt — Push All Repos
 
-After processing all three repos, ask once:
+After processing all four repos, ask once:
 
 > "Would you like to push these repos to their remotes?"
 > - Knowledge base → origin `<branch>`
 > - Claude config → origin `<branch>`
 > - Paper reading → origin `<branch>`
+> - Agent skills → origin `<branch>`
 
 If yes, push all that had commits and report results. If no, acknowledge and stop.
 
